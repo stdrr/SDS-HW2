@@ -84,7 +84,7 @@ handmade.em <- function(y, p, mu, sigma, n_iter, plot_flag = T)
     
     # Plot
     if (plot_flag){
-      hist(y, prob = T, breaks = 30, col = gray(.8), border = NA, 
+      hist(y, prob = T, breaks = 50, col = gray(.8), border = NA, 
            main = "", xlab = paste("EM Iteration: ", iter, "/", n_iter, sep = ""))
       set.seed(123)
       points(jitter(y), rep(0,length(y)), 
@@ -123,3 +123,46 @@ mu2<- c(1.10, 2.50, 7.20)
 sigma2 <- c(1.5, 1.5, 2.5)
 
 handmade.em(y2, p2, mu2, sigma2, n_iter = 20, plot_flag = T)
+
+# Bart samples
+
+suppressMessages(require(mixtools, quietly = T))
+
+n <- 250 # Sample size
+XX <- rnormmix(n,
+               lambda = c(0.5, rep(0.1,5)),
+               mu = c(0, ((0:4)/2)-1),
+               sigma = c(1, rep(0.1,5)) )
+
+p3 <- c(0.40, 0.10, 0.20, 0.15, 0.05, 0.10)
+mu3 <- c(0, ((0:4)/2)-1)
+sigma3 <- c(1, rep(0.1,5))
+
+handmade.em(XX, p3, mu3, sigma3, n_iter = 20, plot_flag = T)
+
+
+# Justify n1 < n2 .. ------------------------------------------------------
+
+n1 <- 30 # Sample size that follows a non-asymptotic way
+XX <- rnormmix(n1,
+               lambda = c(0.5, rep(0.1,5)),
+               mu = c(0, ((0:4)/2)-1),
+               sigma = c(1, rep(0.1,5)) )
+
+p3 <- c(0.40, 0.10, 0.20, 0.15, 0.05, 0.10)
+mu3 <- c(0, ((0:4)/2)-1)
+sigma3 <- c(1, rep(0.1,5))
+
+handmade.em(XX, p3, mu3, sigma3, n_iter = 20, plot_flag = T)
+
+n2 <- 200 # Sample size that follows a reasonably asymptotic way
+XX <- rnormmix(n2,
+               lambda = c(0.5, rep(0.1,5)),
+               mu = c(0, ((0:4)/2)-1),
+               sigma = c(1, rep(0.1,5)) )
+
+p3 <- c(0.40, 0.10, 0.20, 0.15, 0.05, 0.10)
+mu3 <- c(0, ((0:4)/2)-1)
+sigma3 <- c(1, rep(0.1,5))
+
+handmade.em(XX, p3, mu3, sigma3, n_iter = 20, plot_flag = T)

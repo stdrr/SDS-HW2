@@ -105,6 +105,8 @@ handmade.em <- function(y, p, mu, sigma, n_iter, plot_flag = T)
 
 # Show training MoG with k = 2 and k = 3 ----------------------------------
 
+require(randomcoloR)
+
 data("faithful")
 y <- faithful$eruptions
 
@@ -166,3 +168,131 @@ mu3 <- c(0, ((0:4)/2)-1)
 sigma3 <- c(1, rep(0.1,5))
 
 handmade.em(XX, p3, mu3, sigma3, n_iter = 20, plot_flag = T)
+
+
+# Model selections ... ---------------------------------------------
+
+# AIC
+
+AIC <- function(y, kmax) {
+  aic_j <- c()
+  
+  for (k in 1:kmax){
+    p <- runif(k)
+    p <- p/sum(p)
+    
+    mu <- runif(k, min = -1*sd(y), max = 1*sd(y))
+    sigma <- runif(k, min = 2*sd(y), max = 4*sd(y))
+    
+    out_opt <- handmade.em(y, p, mu, sigma, n_iter = k*100, plot_flag = F)$parameters
+    
+    p <- out_opt[1:k]
+    mu <- out_opt[(k+1):(2*k)]
+    sigma <- out_opt[(2*k+1):(3*k)]
+      
+    like <- likelihood(y, p, mu, sigma)
+
+    aic_j <- c(aic_j, 2 * sum(log(like)) - 2 * k)
+  }
+  
+  best_k <- which.max(aic_j) 
+  return(best_k)
+}
+
+# BIC
+
+# Train model with a sample splitted at x% of training data
+
+training_model <- function(y_train, y_test, kmax) {
+  aic_j <- c()
+  
+  for (k in 1:kmax){
+    p <- runif(k)
+    p <- p/sum(p)
+    
+    mu <- runif(k, min = -1*sd(y_train), max = 1*sd(y_train))
+    sigma <- runif(k, min = 2*sd(y_train), max = 4*sd(y_train))
+    
+    out_opt <- handmade.em(y_train, p, mu, sigma, n_iter = k*100, plot_flag = F)$parameters
+  }
+  
+  p <- out_opt[1:k]
+  mu <- out_opt[(k+1):(2*k)]
+  sigma <- out_opt[(2*k+1):(3*k)]
+  
+  like <- likelihood(y_test, p, mu, sigma)
+  
+  aic_j <- c(aic_j, 2 * sum(log(like)) - 2 * k)
+  
+  best_k <- which.max(aic_j) 
+  return(best_k)
+}
+
+# Sample Splitting with 50% in train and 50% in test
+
+split_50_50 <- function(y) {
+  size_s <- floor(0.50 * length(y))
+  trainIndex <- sample(seq_len(length(y)), size = size_s)
+  return (trainIndex)
+}
+
+# Sample Splitting with 70% in train and 30% in test
+
+split_70_30 <- function(y) {
+  size_s <- floor(0.70 * length(y))
+  trainIndex <- sample(seq_len(length(y)), size = size_s)
+  return (trainIndex)
+}
+
+# Sample Splitting with 30% in train and 70% in test
+
+split_30_70 <- function(y) {
+  size_s <- floor(0.30 * length(y))
+  trainIndex <- sample(seq_len(length(y)), size = size_s)
+  return (trainIndex)
+}
+
+# Define the Bart's sample
+
+suppressMessages(require(mixtools, quietly = T))
+
+n <- 250 # define the sample size
+
+M <- 10 
+best_score50and50 <- c(); best_score70and30 <- c(); best_score30and70 <- c(); best_aic_k <- c();
+for (i in 1:M) {
+  XX <- rnormmix(n,
+                 lambda = c(0.5, rep(0.1,5)),
+                 mu = c(0, ((0:4)/2)-1),
+                 sigma = c(1, rep(0.1,5)) )
+  
+  # 50% Training-Test
+  indexes50_50 <- split_50_50(XX)
+  XX_Train50 <- XX[indexes50_50]
+  XX_Test50 <- XX[-indexes50_50]
+  
+  best_score50and50 <- c(best_score50and50, training_model(XX_Train50, XX_Test50, 6))
+  
+  # 70%-30% Training-Test
+  indexes70_30 <- split_70_30(XX)
+  XX_Train70 <- XX[indexes70_30]
+  XX_Test30 <- XX[-indexes70_30]
+  
+  best_score70and30 <- c(best_score70and30, training_model(XX_Train70, XX_Test30, 6))
+  
+  # 30%-70% Training-Test
+  indexes30_70 <- split_30_70(XX)
+  XX_Train30 <- XX[indexes30_70]
+  XX_Test70 <- XX[-indexes30_70]
+  
+  best_score30and70 <- c(best_score30and70, training_model(XX_Train30, XX_Test70, 6))
+  
+  # find the best k components with AIC
+  best_aic_k <- c(best_aic_k, AIC(XX, 6))
+}
+
+paste("The best k component with the AIC method is: ", which.max(tabulate(best_aic_k)))
+
+paste("The best k component with the sample splitting at 50% and 50% is: ", which.max(tabulate(best_score50and50)))
+paste("The best k component with the sample splitting at 70% and 30% method is: ", which.max(tabulate(best_score70and30)))
+paste("The best k component with the sample splitting at 30% and 70% method is: ", which.max(tabulate(best_score30and70)))

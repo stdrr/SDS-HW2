@@ -6,7 +6,7 @@
 
 require(ramify)
 
-d_init <- function(y, p, mu, sigma) {
+d.init <- function(y, p, mu, sigma) {
   k <- length(p)
   len.y <- length(y)
   
@@ -31,13 +31,13 @@ likelihood <- function(y, p, mu, sigma) {
   return(like)
 }
 
-assign_color <- function(cols, d) {
+assign.color <- function(cols, d) {
   argm <- argmax(d, rows = FALSE)
   return(cols[argm])
 }
 
 # p is a vector of weights (pi)
-handmade.em <- function(y, p, mu, sigma, n_iter, plot_flag = T)
+handmade.em <- function(y, p, mu, sigma, n.iter, plot.flag = T)
 {
   k <- length(p)
   len.y <- length(y)
@@ -59,12 +59,12 @@ handmade.em <- function(y, p, mu, sigma, n_iter, plot_flag = T)
   like <- likelihood(y, p, mu, sigma)
   
   deviance <- -2*sum(log(like)) 
-  res      <- matrix(NA,n_iter + 1, 3*k+2) # number of columns
+  res      <- matrix(NA,n.iter + 1, 3*k+2) # number of columns
   res[1,]  <- c(0, p, mu, sigma, deviance)
   
   
-  d <- d_init(y, p, mu, sigma) # E step - part 1
-  for (iter in 1:n_iter) {
+  d <- d.init(y, p, mu, sigma) # E step - part 1
+  for (iter in 1:n.iter) {
     
     # E step - part 2
     r <- matrix(NA, k, len.y)
@@ -88,16 +88,16 @@ handmade.em <- function(y, p, mu, sigma, n_iter, plot_flag = T)
     res[iter+1,] <- c(iter, p, mu, sigma, deviance)
     
     # E step - part 1.1
-    d <- d_init(y, p, mu, sigma) 
+    d <- d.init(y, p, mu, sigma) 
     
     # Plot
-    if (plot_flag){
+    if (plot.flag){
       hist(y, prob = T, breaks = 50, col = gray(.8), border = NA, 
-           main = "", xlab = paste("EM Iteration: ", iter, "/", n_iter, sep = ""))
+           main = "", xlab = paste("EM Iteration: ", iter, "/", n.iter, sep = ""))
       set.seed(123)
       points(jitter(y), rep(0,length(y)), 
              pch = 19, cex = .6, 
-             col = assign_color(cols, d))
+             col = assign.color(cols, d))
       curve(likelihood(x, p, mu, sigma),
             lwd = 4, col = rgb(0,0,0,.5), add = TRUE)
       Sys.sleep(1.5)
@@ -122,7 +122,7 @@ p <- c(.5,.5)
 mu <- c(1.10,5.20)
 sigma <- c(1.5,1.5)
 
-handmade.em(y, p, mu, sigma, n_iter = 20, plot_flag = T)
+handmade.em(y, p, mu, sigma, n.iter = 20, plot.flag = T)
 
 # try with another famous dataset called "iris"
 data("iris")
@@ -132,7 +132,7 @@ p2 <- c(.33, .33, .34)
 mu2<- c(1.10, 2.50, 7.20)
 sigma2 <- c(1.5, 1.5, 2.5)
 
-handmade.em(y2, p2, mu2, sigma2, n_iter = 20, plot_flag = T)
+handmade.em(y2, p2, mu2, sigma2, n.iter = 20, plot.flag = T)
 
 # Bart samples
 
@@ -149,7 +149,7 @@ p3 <- parameters$p # c(0.40, 0.10, 0.20, 0.15, 0.05, 0.10)
 mu3 <- parameters$mu # c(0, ((0:4)/2)-1)
 sigma3 <- parameters$sigma # c(1, rep(0.1,5))
 
-handmade.em(XX, p3, mu3, sigma3, n_iter = 600, plot_flag = T)
+handmade.em(XX, p3, mu3, sigma3, n.iter = 600, plot.flag = T)
 
 
 # Justify n1 < n2 .. ------------------------------------------------------
@@ -164,7 +164,7 @@ p3 <- c(0.40, 0.10, 0.20, 0.15, 0.05, 0.10)
 mu3 <- c(0, ((0:4)/2)-1)
 sigma3 <- c(1, rep(0.1,5))
 
-handmade.em(XX, p3, mu3, sigma3, n_iter = 20, plot_flag = T)
+handmade.em(XX, p3, mu3, sigma3, n.iter = 20, plot.flag = T)
 
 n2 <- 200 # Sample size that follows a reasonably asymptotic way
 XX <- rnormmix(n2,
@@ -176,35 +176,23 @@ p3 <- c(0.40, 0.10, 0.20, 0.15, 0.05, 0.10)
 mu3 <- c(0, ((0:4)/2)-1)
 sigma3 <- c(1, rep(0.1,5))
 
-handmade.em(XX, p3, mu3, sigma3, n_iter = 20, plot_flag = T)
+handmade.em(XX, p3, mu3, sigma3, n.iter = 20, plot.flag = T)
 
 
 # Model selections ... ---------------------------------------------
 
 initialize.parameters <- function(y, k) {
-  n <- length(y)
-  r <- matrix(NA, k, n)
-  for(i in 1:k) {
-    r[i,] <- runif(n, min=0.1, max=0.9)
-  }
-  
-  p <- rep(0, k)
-  mu <- rep(0, k)
-  sigma <- rep(0, k)
-  
-  for(i in 1:k) {
-    p[i] <- mean(r[i,])
-    mu[i]    <- sum(r[i,]*y)/sum(r[i,])
-    sigma[i] <- sqrt( sum(r[i,]*(y^2))/sum(r[i,]) - (mu[i])^2 )
-  }
+  p <- rep(1/k, k)
+  mu    <- runif(k, min = 0.1, max= 0.9)
+  sigma <- runif(k, min = 0.1, max = 0.9)
   
   return(list(p = p, mu = mu, sigma = sigma))
 }
 
 # AIC
 
-AIC <- function(y, kmax, n_iter) {
-  aic_j <- c()
+AIC <- function(y, kmax, n.iter) {
+  aic.j <- c()
   
   for (k in 1:kmax){
     parameters <- initialize.parameters(y, k)
@@ -214,25 +202,25 @@ AIC <- function(y, kmax, n_iter) {
     mu <- parameters$mu # runif(k, min = -1*sd(y), max = 1*sd(y))
     sigma <- parameters$sigma # runif(k, min = 2*sd(y), max = 4*sd(y))
     
-    out_opt <- handmade.em(y, p, mu, sigma, n_iter = n_iter, plot_flag = F)$parameters
+    out.opt <- handmade.em(y, p, mu, sigma, n.iter = n.iter, plot.flag = F)$parameters
     
-    p <- out_opt[1:k]
-    mu <- out_opt[(k+1):(2*k)]
-    sigma <- out_opt[(2*k+1):(3*k)]
+    p <- out.opt[1:k]
+    mu <- out.opt[(k+1):(2*k)]
+    sigma <- out.opt[(2*k+1):(3*k)]
       
     like <- likelihood(y, p, mu, sigma)
 
-    aic_j <- c(aic_j, 2 * sum(log(like)) - 2 * k)
+    aic.j <- c(aic.j, 2 * sum(log(like)) - 2 * k)
   }
   
-  best_k <- which.max(aic_j) 
-  return(best_k)
+  best.k <- which.max(aic.j) 
+  return(best.k)
 }
 
 # BIC
 
-BIC <- function(y, kmax, n_iter) {
-  bic_j <- c()
+BIC <- function(y, kmax, n.iter) {
+  bic.j <- c()
   len.y <- length(y)
   
   for (k in 1:kmax){
@@ -241,54 +229,143 @@ BIC <- function(y, kmax, n_iter) {
     mu <- parameters$mu 
     sigma <- parameters$sigma
       
-    out_opt <- handmade.em(y, p, mu, sigma, n_iter = n_iter, plot_flag = F)$parameters
+    out.opt <- handmade.em(y, p, mu, sigma, n.iter = n.iter, plot.flag = F)$parameters
     
-    p <- out_opt[1:k]
-    mu <- out_opt[(k+1):(2*k)]
-    sigma <- out_opt[(2*k+1):(3*k)]
+    p <- out.opt[1:k]
+    mu <- out.opt[(k+1):(2*k)]
+    sigma <- out.opt[(2*k+1):(3*k)]
     
     like <- likelihood(y, p, mu, sigma)
     
-    bic_j <- c(bic_j, sum(log(like)) - log(len.y)/2 * k)
+    bic.j <- c(bic.j, sum(log(like)) - log(len.y)/2 * k)
   }
   
-  best_k <- which.max(bic_j) 
-  return(best_k)
-}
-
-# Train model with a sample splitted at x% of training data
-
-training_model <- function(y_train, y_test, kmax, n_iter) {
-  like_j <- c()
-  
-  for (k in 1:kmax){
-    parameters <- initialize.parameters(y_train, k)
-    p <- parameters$p 
-    mu <- parameters$mu 
-    sigma <- parameters$sigma
-    
-    out_opt <- handmade.em(y_train, p, mu, sigma, n_iter = n_iter, plot_flag = F)$parameters
-    
-    p <- out_opt[1:k]
-    mu <- out_opt[(k+1):(2*k)]
-    sigma <- out_opt[(2*k+1):(3*k)]
-    
-    like <- likelihood(y_test, p, mu, sigma)
-    
-    like_j <- c(like_j, sum(log(like)))
-  }
-  
-  best_k <- which.max(like_j) 
-  return(best_k)
+  best.k <- which.max(bic.j) 
+  return(best.k)
 }
 
 # Sample Splitting with 50% in train and 50% in test
 
 split.data <- function(y, perc) {
-  size_s <- floor(perc * length(y))
-  trainIndex <- sample(seq_len(length(y)), size = size_s)
+  size.s <- floor(perc * length(y))
+  trainIndex <- sample(seq_len(length(y)), size = size.s)
   return (trainIndex)
 }
+
+# Train model with a sample splitted at x% of training data
+
+training.model <- function(y.train, y.test, kmax, n.iter) {
+  like.j <- c()
+  
+  for (k in 1:kmax){
+    parameters <- initialize.parameters(y.train, k)
+    p <- parameters$p 
+    mu <- parameters$mu 
+    sigma <- parameters$sigma
+    
+    out.opt <- handmade.em(y.train, p, mu, sigma, n.iter = n.iter, plot.flag = F)$parameters
+    
+    p <- out.opt[1:k]
+    mu <- out.opt[(k+1):(2*k)]
+    sigma <- out.opt[(2*k+1):(3*k)]
+    
+    like <- likelihood(y.test, p, mu, sigma)
+    
+    like.j <- c(like.j, sum(log(like)))
+  }
+  
+  best.k <- which.max(like.j) 
+  return(best.k)
+}
+
+# K-fold Cross-Validation
+
+library(caret)
+
+k.fold.cross.validation <- function(y, k.folds, kmax, n.iter) {
+  best.cross.v <- c() 
+  expectations <- c()
+  like.j <- c()
+  
+  lst.k.folds <- createFolds(y, k = k.folds, list = TRUE, returnTrain = FALSE)
+  
+  fold.names <- names(lst.k.folds)
+  for (k in 1:kmax) {
+    for (x in 1:k.folds) {
+      n.k.fold <- fold.names[x]
+      
+      test.set <- y[unlist(lst.k.folds[n.k.fold], use.names=FALSE)]            
+      train.set <- y[-unlist(lst.k.folds[n.k.fold], use.names = FALSE)]          
+      
+      parameters <- initialize.parameters(train.set, k)
+      p <- parameters$p 
+      mu <- parameters$mu 
+      sigma <- parameters$sigma
+      
+      out.opt <- handmade.em(train.set, p, mu, sigma, n.iter = n.iter, plot.flag = F)$parameters
+      
+      p <- out.opt[1:k]
+      mu <- out.opt[(k+1):(2*k)]
+      sigma <- out.opt[(2*k+1):(3*k)]
+      
+      like <- likelihood(test.set, p, mu, sigma)
+      
+      like.j <- c(like.j, mean(log(like)))
+    }
+    
+    expectations <- c(expectations, mean(like.j))
+  }
+
+  best.cross.v <- which.max(expectations)
+  return(best.cross.v)
+}
+
+# Wasserstein method score
+
+library(KScorrect)
+
+wass.score <- function(y.train, y.test, kmax, n.iter) {
+  f.x.tr <- c();
+  
+  for (k in 1:kmax){
+    parameters <- initialize.parameters(y.train, k)
+    p <- parameters$p 
+    mu <- parameters$mu 
+    sigma <- parameters$sigma
+    
+    out.opt <- handmade.em(y.train, p, mu, sigma, n.iter = n.iter, plot.flag = F)$parameters
+    
+    p <- out.opt[1:k]
+    mu <- out.opt[(k+1):(2*k)]
+    sigma <- out.opt[(2*k+1):(3*k)]
+    
+    f.x.tr <- c(f.x.tr, qmixnorm(likelihood(y.train, p, mu, sigma), mu, sigma, p))
+  }
+  
+  # after finding the best parameters
+  f.x.te <- ecdf(y.test)
+  
+  
+  wass <- abs(f.x.tr - f.x.te)
+  wass.sc <- integrate(wass, 0, 1)
+  
+  return(wass.sc)
+}
+
+# return the max indexes of k components
+
+max.k <- function(res) {
+  k <- 0
+  max <- -1
+  for(i in 1:length(res)) {
+    if(max <= res[i] && k < i) {
+      k <- i
+      max <- res[i]
+    }
+  }
+  return(k)
+}
+
 
 # Define the Bart's sample
 
@@ -297,46 +374,65 @@ suppressMessages(require(mixtools, quietly = T))
 n <- 250 # define the sample size
 
 M <- 10 
-n_iter <- 600
-best_score50and50 <- c(); best_score70and30 <- c(); best_score30and70 <- c(); best_aic_k <- c(); best_bic_k <- c();
+n.iter <- 20
+best.score50and50 <- c(); best.score70and30 <- c(); best.score30and70 <- c();
+
+best.aic.k <- c(); best.bic.k <- c();
+
+best.cross.validation5 <- c(); best.cross.validation10 <- c();
+
+wasses <- c();
 for (i in 1:M) {
   XX <- rnormmix(n,
                  lambda = c(0.5, rep(0.1,5)),
                  mu = c(0, ((0:4)/2)-1),
                  sigma = c(1, rep(0.1,5)) )
   
-  # 50% Training-Test
-  indexes50_50 <- split.data(XX, perc=0.5)
-  XX_Train50 <- XX[indexes50_50]
-  XX_Test50 <- XX[-indexes50_50]
+  # find the best k components with AIC
+  best.aic.k <- c(best.aic.k, AIC(XX, kmax=6, n.iter))
   
-  best_score50and50 <- c(best_score50and50, training_model(XX_Train50, XX_Test50, 6, n_iter))
+  best.bic.k <- c(best.bic.k, BIC(XX, kmax=6, n.iter))
+  
+  # 50% Training-Test
+  indexes50.50 <- split.data(XX, perc=0.5)
+  XX.Train50 <- XX[indexes50.50]
+  XX.Test50 <- XX[-indexes50.50]
+  
+  best.score50and50 <- c(best.score50and50, training.model(XX.Train50, XX.Test50, kmax=6, n.iter))
   
   # 70%-30% Training-Test
-  indexes70_30 <- split.data(XX, perc=0.7)
-  XX_Train70 <- XX[indexes70_30]
-  XX_Test30 <- XX[-indexes70_30]
+  indexes70.30 <- split.data(XX, perc=0.7)
+  XX.Train70 <- XX[indexes70.30]
+  XX.Test30 <- XX[-indexes70.30]
   
-  best_score70and30 <- c(best_score70and30, training_model(XX_Train70, XX_Test30, 6, n_iter))
+  best.score70and30 <- c(best.score70and30, training.model(XX.Train70, XX.Test30, kmax=6, n.iter))
   
   # 30%-70% Training-Test
-  indexes30_70 <- split.data(XX, perc=0.3)
-  XX_Train30 <- XX[indexes30_70]
-  XX_Test70 <- XX[-indexes30_70]
+  indexes30.70 <- split.data(XX, perc=0.3)
+  XX.Train30 <- XX[indexes30.70]
+  XX.Test70 <- XX[-indexes30.70]
   
-  best_score30and70 <- c(best_score30and70, training_model(XX_Train30, XX_Test70, 6, n_iter))
+  best.score30and70 <- c(best.score30and70, training.model(XX.Train30, XX.Test70, kmax=6, n.iter))
   
-  # find the best k components with AIC
-  best_aic_k <- c(best_aic_k, AIC(XX, 6, n_iter))
+  # K-Fold Cross-Validation
+  best.cross.validation5 <- c(best.cross.validation5, k.fold.cross.validation(XX, k.folds=5, kmax=6, n.iter))
+  best.cross.validation10 <- c(best.cross.validation10, k.fold.cross.validation(XX, k.folds=5, kmax=6, n.iter))
   
-  best_bic_k <- c(best_bic_k, BIC(XX, 6, n_iter))
+  #Wass score
+  wasses <- c(wasses, wass.score(XX.Train50, XX.Test50, kmax=6, n.iter))
 }
 
-paste("The best k component with the AIC method is: ", which.max(tabulate(best_aic_k)))
-paste("The best k component with the BIC method is: ", which.max(tabulate(best_bic_k)))
-paste("The best k component with the sample splitting at 50% and 50% is: ", which.max(tabulate(best_score50and50)))
-paste("The best k component with the sample splitting at 70% and 30% method is: ", which.max(tabulate(best_score70and30)))
-paste("The best k component with the sample splitting at 30% and 70% method is: ", which.max(tabulate(best_score30and70)))
-# 
+paste("The best k component with the AIC method is: ", max.k(tabulate(best.aic.k)))
+
+paste("The best k component with the BIC method is: ", max.k(tabulate(best.bic.k)))
+
+paste("The best k component with the sample splitting at 50% and 50% is: ", max.k(tabulate(best.score50and50)))
+paste("The best k component with the sample splitting at 70% and 30% method is: ", max.k(tabulate(best.score70and30)))
+paste("The best k component with the sample splitting at 30% and 70% method is: ", max.k(tabulate(best.score30and70)))
+
+paste("The best k component with the k-fold 5 cross-validation method is: ", max.k(tabulate(best.cross.validation5)))
+paste("The best k component with the k-fold 10 cross-validation method is: ", max.k(tabulate(best.cross.validation10)))
+
+paste("The best k component with the wass score method is: ", max.k(tabulate(wasses)))
 
 

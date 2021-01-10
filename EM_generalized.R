@@ -210,7 +210,7 @@ AIC <- function(y, kmax, n.iter) {
       
     like <- likelihood(y, p, mu, sigma)
 
-    aic.j <- c(aic.j, 2 * sum(log(like)) - 2 * k)
+    aic.j <- c(aic.j, 2 * sum(log(like)) - 2 * (3*k-1))
   }
   
   best.k <- which.max(aic.j) 
@@ -237,7 +237,7 @@ BIC <- function(y, kmax, n.iter) {
     
     like <- likelihood(y, p, mu, sigma)
     
-    bic.j <- c(bic.j, sum(log(like)) - log(len.y)/2 * k)
+    bic.j <- c(bic.j, sum(log(like)) - log(len.y)/2 * (3*k-1))
   }
   
   best.k <- which.max(bic.j) 
@@ -325,8 +325,9 @@ k.fold.cross.validation <- function(y, k.folds, kmax, n.iter) {
 library(KScorrect)
 
 wass.score <- function(y.train, y.test, kmax, n.iter) {
-  f.x.tr <- c();
+  wass.sc <- c();
   
+  f.x.te <- sort(knots(ecdf(y.test))) # define the test set applying the ecdf
   for (k in 1:kmax){
     parameters <- initialize.parameters(y.train, k)
     p <- parameters$p 
@@ -339,17 +340,13 @@ wass.score <- function(y.train, y.test, kmax, n.iter) {
     mu <- out.opt[(k+1):(2*k)]
     sigma <- out.opt[(2*k+1):(3*k)]
     
-    f.x.tr <- c(f.x.tr, qmixnorm(likelihood(y.train, p, mu, sigma), mu, sigma, p))
+    f.x.tr <- sort(qmixnorm(likelihood(y.train, p, mu, sigma), mu, sigma, p))
+    
+    wass.sc <- c(wass.sc, integrate(abs(f.x.tr-f.x.te), 0, 1))
   }
   
-  # after finding the best parameters
-  f.x.te <- ecdf(y.test)
-  
-  
-  wass <- abs(f.x.tr - f.x.te)
-  wass.sc <- integrate(wass, 0, 1)
-  
-  return(wass.sc)
+  best.wass <- which.min(wass.sc)
+  return(best.wass)
 }
 
 # return the max indexes of k components
@@ -419,7 +416,8 @@ for (i in 1:M) {
   best.cross.validation10 <- c(best.cross.validation10, k.fold.cross.validation(XX, k.folds=5, kmax=6, n.iter))
   
   #Wass score
-  wasses <- c(wasses, wass.score(XX.Train50, XX.Test50, kmax=6, n.iter))
+  #wasses <- c(wasses, wass.score(XX.Train50, XX.Test50, kmax=6, n.iter))
+  print(wasses)
 }
 
 paste("The best k component with the AIC method is: ", max.k(tabulate(best.aic.k)))
@@ -434,5 +432,3 @@ paste("The best k component with the k-fold 5 cross-validation method is: ", max
 paste("The best k component with the k-fold 10 cross-validation method is: ", max.k(tabulate(best.cross.validation10)))
 
 paste("The best k component with the wass score method is: ", max.k(tabulate(wasses)))
-
-

@@ -371,11 +371,11 @@ max.k <- function(res) {
 
 suppressMessages(require(mixtools, quietly = T))
 
-n <- 500 # define the sample size
+n <- 2000 # define the sample size
 
 M <- 10 
 n.iter <- 20
-kmax <- 6
+kmax <- 10
 best.score50and50 <- c(); best.score70and30 <- c(); best.score30and70 <- c();
 
 best.aic.k <- c(); best.bic.k <- c();
@@ -417,7 +417,7 @@ for (i in 1:M) {
   
   # K-Fold Cross-Validation
   best.cross.validation5 <- c(best.cross.validation5, k.fold.cross.validation(XX, k.folds=5, kmax=kmax, n.iter))
-  best.cross.validation10 <- c(best.cross.validation10, k.fold.cross.validation(XX, k.folds=5, kmax=kmax, n.iter))
+  best.cross.validation10 <- c(best.cross.validation10, k.fold.cross.validation(XX, k.folds=10, kmax=kmax, n.iter))
   
   #Wass score
   wasses <- c(wasses, wass.score(XX.Train50, XX.Test50, kmax=kmax, n.iter))

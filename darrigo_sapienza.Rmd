@@ -35,6 +35,7 @@ d.init <- function(y, p, mu, sigma) {
 }
 ```
 $$~$$
+
 ```{r}
 likelihood <- function(y, p, mu, sigma) {
   kk <- length(p)

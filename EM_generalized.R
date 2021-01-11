@@ -325,9 +325,12 @@ k.fold.cross.validation <- function(y, k.folds, kmax, n.iter) {
 library(KScorrect)
 
 wass.score <- function(y.train, y.test, kmax, n.iter) {
+  f <- function(z, p, mu, sigma, y.test) {
+    return(abs(qmixnorm(p = z, mean = mu, sd = sigma, pro = p) - quantile(y.test, probs = z)))
+  }
+  
   wass.sc <- c();
   
-  f.x.te <- sort(knots(ecdf(y.test))) # define the test set applying the ecdf
   for (k in 1:kmax){
     parameters <- initialize.parameters(y.train, k)
     p <- parameters$p 
@@ -340,9 +343,9 @@ wass.score <- function(y.train, y.test, kmax, n.iter) {
     mu <- out.opt[(k+1):(2*k)]
     sigma <- out.opt[(2*k+1):(3*k)]
     
-    f.x.tr <- sort(qmixnorm(likelihood(y.train, p, mu, sigma), mu, sigma, p))
-    
-    wass.sc <- c(wass.sc, integrate(abs(f.x.tr-f.x.te), 0, 1))
+    wass.sc <- c(wass.sc, integrate(f, lower = 0, upper = 1,
+                                    p = p, mu = mu, sigma = sigma, y.test = y.test, 
+                                    rel.tol=.Machine$double.eps^.05)$value)
   }
   
   best.wass <- which.min(wass.sc)
@@ -368,10 +371,11 @@ max.k <- function(res) {
 
 suppressMessages(require(mixtools, quietly = T))
 
-n <- 250 # define the sample size
+n <- 500 # define the sample size
 
 M <- 10 
 n.iter <- 20
+kmax <- 6
 best.score50and50 <- c(); best.score70and30 <- c(); best.score30and70 <- c();
 
 best.aic.k <- c(); best.bic.k <- c();
@@ -386,38 +390,37 @@ for (i in 1:M) {
                  sigma = c(1, rep(0.1,5)) )
   
   # find the best k components with AIC
-  best.aic.k <- c(best.aic.k, AIC(XX, kmax=6, n.iter))
+  best.aic.k <- c(best.aic.k, AIC(XX, kmax=kmax, n.iter))
   
-  best.bic.k <- c(best.bic.k, BIC(XX, kmax=6, n.iter))
+  best.bic.k <- c(best.bic.k, BIC(XX, kmax=kmax, n.iter))
   
   # 50% Training-Test
   indexes50.50 <- split.data(XX, perc=0.5)
   XX.Train50 <- XX[indexes50.50]
   XX.Test50 <- XX[-indexes50.50]
   
-  best.score50and50 <- c(best.score50and50, training.model(XX.Train50, XX.Test50, kmax=6, n.iter))
+  best.score50and50 <- c(best.score50and50, training.model(XX.Train50, XX.Test50, kmax=kmax, n.iter))
   
   # 70%-30% Training-Test
   indexes70.30 <- split.data(XX, perc=0.7)
   XX.Train70 <- XX[indexes70.30]
   XX.Test30 <- XX[-indexes70.30]
   
-  best.score70and30 <- c(best.score70and30, training.model(XX.Train70, XX.Test30, kmax=6, n.iter))
+  best.score70and30 <- c(best.score70and30, training.model(XX.Train70, XX.Test30, kmax=kmax, n.iter))
   
   # 30%-70% Training-Test
   indexes30.70 <- split.data(XX, perc=0.3)
   XX.Train30 <- XX[indexes30.70]
   XX.Test70 <- XX[-indexes30.70]
   
-  best.score30and70 <- c(best.score30and70, training.model(XX.Train30, XX.Test70, kmax=6, n.iter))
+  best.score30and70 <- c(best.score30and70, training.model(XX.Train30, XX.Test70, kmax=kmax, n.iter))
   
   # K-Fold Cross-Validation
-  best.cross.validation5 <- c(best.cross.validation5, k.fold.cross.validation(XX, k.folds=5, kmax=6, n.iter))
-  best.cross.validation10 <- c(best.cross.validation10, k.fold.cross.validation(XX, k.folds=5, kmax=6, n.iter))
+  best.cross.validation5 <- c(best.cross.validation5, k.fold.cross.validation(XX, k.folds=5, kmax=kmax, n.iter))
+  best.cross.validation10 <- c(best.cross.validation10, k.fold.cross.validation(XX, k.folds=5, kmax=kmax, n.iter))
   
   #Wass score
-  #wasses <- c(wasses, wass.score(XX.Train50, XX.Test50, kmax=6, n.iter))
-  print(wasses)
+  wasses <- c(wasses, wass.score(XX.Train50, XX.Test50, kmax=kmax, n.iter))
 }
 
 paste("The best k component with the AIC method is: ", max.k(tabulate(best.aic.k)))

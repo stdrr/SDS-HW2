@@ -1,0 +1,125 @@
+---
+title: "Whack a MoG"
+author: "Stefano D'Arrigo, Jeremy Sapienza"
+date: "11 gennaio 2021"
+output: html_document
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+```
+
+# SDS HOMEWORK 2
+
+In this exercise we design a simulation study in order to compare the performance of different model selection techniques.
+
+## 1. Code for the EM-fit of a generic mixture of k > 1 Gaussians
+As a first step for this study, we extend the code provided [here](https://tinyurl.com/y9lgxbdz) in order to work with an arbitrary number of Gaussian components.
+Before modifying the `handmade.em` function, we define some routines which we make use of within it.
+
+
+The first routine, `d.init`, computes the E step of the EM algorithm; we decided to put the following lines of code inside this function from the original function in order to avoid repetitions within the `handmade.em`.
+
+$$~$$
+```{r}
+d.init <- function(y, p, mu, sigma) {
+  k <- length(p)
+  len.y <- length(y)
+  d <- matrix(NA, k, len.y)
+  
+  for(i in 1:k) {
+    d[i,] <- p[i] * dnorm(y, mu[i], sigma[i])
+  }
+  
+  return(d)
+}
+```
+$$~$$
+```{r}
+likelihood <- function(y, p, mu, sigma) {
+  kk <- length(p)
+  like <- 0
+  
+  for(i in 1:kk) {
+    like <- like + p[i] * dnorm(y, mu[i], sigma[i])
+  }
+  
+  return(like)
+}
+```
+
+$$~$$
+
+```{r}
+handmade.em <- function(y, p, mu, sigma, n.iter, plot.flag = T)
+{
+  k <- length(p)
+  len.y <- length(y)
+  
+  # set k random colors
+  # cols <- randomColor(count = k, 
+  #                     hue = c(" ", "random", "red", "orange", "yellow", "green", "blue", "purple", "pink", "monochrome"), 
+  #                     luminosity = c(" ", "random", "light", "bright", "dark"))
+  cols <- c(rgb(32/255, 74/255, 135/255, 0.7),
+            rgb(204/255, 0, 0, 0.7),
+            rgb(200/255, 141/255, 0, 0.7),
+            rgb(78/255, 153/255, 6/255, 0.7),
+            rgb(32/255, 74/255, 135/255, 0.3),
+            rgb(204/255, 0, 0, 0.3),
+            rgb(200/255, 141/255, 0, 0.3),
+            rgb(78/255, 153/255, 6/255, 0.3))
+  
+  # compute the likelihood for k Gaussians
+  like <- likelihood(y, p, mu, sigma)
+  
+  deviance <- -2 * sum(log(like)) 
+  res      <- matrix(NA,n.iter + 1, 3 * k + 2) # number of columns
+  res[1,]  <- c(0, p, mu, sigma, deviance)
+  
+  
+  d <- d.init(y, p, mu, sigma) # E step - part 1
+  for (iter in 1:n.iter) {
+    
+    # E step - part 2
+    r <- matrix(NA, k, len.y)
+    for(i in 1:k) {
+      r[i,] <- d[i,] / colSums(d)
+    }
+    
+    # M step
+    for(i in 1:k) {
+      p[i] <- mean(r[i,])
+      mu[i] <- sum(r[i,] * y) / sum(r[i,])
+      sigma[i] <- sqrt(sum(r[i,] * (y^2)) / sum(r[i,]) - (mu[i])^2)
+    }
+    
+    # -2 x log-likelihood (a.k.a. deviance)
+    like <- likelihood(y, p, mu, sigma)
+    
+    deviance <- -2 * sum( log(like) )
+    
+    # Save
+    res[iter+ 1,] <- c(iter, p, mu, sigma, deviance)
+    
+    # E step - part 1.1
+    d <- d.init(y, p, mu, sigma) 
+    
+    # Plot
+    if (plot.flag){
+      hist(y, prob = T, breaks = 50, col = gray(.8), border = NA, 
+           main = "", xlab = paste("EM Iteration: ", iter, "/", n.iter, sep = ""))
+      set.seed(123)
+      points(jitter(y), rep(0,length(y)), 
+             pch = 19, cex = .6, 
+             col = assign.color(cols, d))
+      curve(likelihood(x, p, mu, sigma),
+            lwd = 4, col = rgb(0,0,0,.5), add = TRUE)
+      Sys.sleep(1.5)
+    }
+  }
+  res <- data.frame(res)
+  names(res) <- c("iteration", paste("p", 1:k, sep=""), paste("mu", 1:k, sep=""), paste("sigma", 1:k, sep=""), "deviance")
+  out <- list(parameters = c(p = p, mu = mu, sigma = sigma), deviance = deviance, res = res)
+  return(out)
+}
+```

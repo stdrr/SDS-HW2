@@ -1,6 +1,6 @@
 ---
-title: "Whack a MoG"
-author: "Stefano D'Arrigo, Jeremy Sapienza"
+title: "SDS HOMEWORK 2"
+author: "Stefano D'Arrigo & Jeremy Sapienza"
 date: "11 gennaio 2021"
 output: html_document
 ---
@@ -9,26 +9,26 @@ output: html_document
 knitr::opts_chunk$set(echo = TRUE)
 ```
 
-# SDS HOMEWORK 2
+# Whack a MoG
 
 In this exercise we design a simulation study in order to compare the performance of different model selection techniques.
 
-## 1. Code for the EM-fit of a generic mixture of k > 1 Gaussians
+## 1. Code for the EM-fit of a generic mixture of $k \geq 1$ Gaussians
 As a first step for this study, we extend the code provided [here](https://tinyurl.com/y9lgxbdz) in order to work with an arbitrary number of Gaussian components.
 Before modifying the `handmade.em` function, we define some routines which we make use of within it.
 
 
-The first routine, `d.init`, computes the E step of the EM algorithm; we decided to put the following lines of code inside this function from the original function in order to avoid repetitions within the `handmade.em`.
+The first routine, `d.init`, computes the E step of the EM algorithm.
 
 $$~$$
 ```{r}
 d.init <- function(y, p, mu, sigma) {
-  k <- length(p)
-  len.y <- length(y)
-  d <- matrix(NA, k, len.y)
+  k <- length(p) # save the number of K gaussian components which is equal to the length of weights' vector                           
+  len.y <- length(y) # save the number of samples
+  d <- matrix(NA, k, len.y) # define the matrix with k components as number of rows and len.y as number of columns
   
   for(i in 1:k) {
-    d[i,] <- p[i] * dnorm(y, mu[i], sigma[i])
+    d[i,] <- p[i] * dnorm(y, mu[i], sigma[i]) # for each k iteration we update the probability for each y observation 
   }
   
   return(d)
@@ -36,13 +36,16 @@ d.init <- function(y, p, mu, sigma) {
 ```
 $$~$$
 
+The `likelihood` function is another routine used into the `handmade.em` that calculates for each observation the corresponding likelihood probability.
+
 ```{r}
 likelihood <- function(y, p, mu, sigma) {
-  kk <- length(p)
+  kk <- length(p) # save the number of K gaussian components which is equal to the length of weights' vector
   like <- 0
   
   for(i in 1:kk) {
-    like <- like + p[i] * dnorm(y, mu[i], sigma[i])
+    # for each observation calculates the p(y|x;theta) where theta are the parameters of the Gaussian 
+    like <- like + p[i] * dnorm(y, mu[i], sigma[i]) 
   }
   
   return(like)
@@ -51,58 +54,67 @@ likelihood <- function(y, p, mu, sigma) {
 
 $$~$$
 
-```{r}
+With this last support routine for the `handmade.em` function wrote below, we assign to each observation the color of the gaussian component which it most likely belongs to. 
+
+```{r message=FALSE, warning=FALSE}
+require(ramify) # we import this library in order to apply the argmax through the d matrix
+
+assign.color <- function(cols, d) {
+  argm <- argmax(d, rows = FALSE) # we find the argmax through each column
+  return(cols[argm]) # return the corresponding color
+}
+```
+
+$$~$$
+
+At this point the `handmade.em` function generalized for an arbitrary number of Gaussian components: 
+
+```{r message=FALSE, warning=FALSE}
+require(randomcoloR) # we import this library in order to generate k random colors
+
 handmade.em <- function(y, p, mu, sigma, n.iter, plot.flag = T)
 {
-  k <- length(p)
-  len.y <- length(y)
+  k <- length(p) # save the number of K gaussian components which is equal to the length of weights' vector
+  len.y <- length(y) # save the number of samples
   
   # set k random colors
-  # cols <- randomColor(count = k, 
-  #                     hue = c(" ", "random", "red", "orange", "yellow", "green", "blue", "purple", "pink", "monochrome"), 
-  #                     luminosity = c(" ", "random", "light", "bright", "dark"))
-  cols <- c(rgb(32/255, 74/255, 135/255, 0.7),
-            rgb(204/255, 0, 0, 0.7),
-            rgb(200/255, 141/255, 0, 0.7),
-            rgb(78/255, 153/255, 6/255, 0.7),
-            rgb(32/255, 74/255, 135/255, 0.3),
-            rgb(204/255, 0, 0, 0.3),
-            rgb(200/255, 141/255, 0, 0.3),
-            rgb(78/255, 153/255, 6/255, 0.3))
+  cols <- randomColor(count = k, 
+                      hue = c(" ", "random", "red", "orange", "yellow", "green", "blue", "purple", "pink", "monochrome"), 
+                      luminosity = c(" ", "random", "light", "bright", "dark"))
   
   # compute the likelihood for k Gaussians
   like <- likelihood(y, p, mu, sigma)
   
-  deviance <- -2 * sum(log(like)) 
-  res      <- matrix(NA,n.iter + 1, 3 * k + 2) # number of columns
-  res[1,]  <- c(0, p, mu, sigma, deviance)
+  deviance <- -2 * sum(log(like))
+  res      <- matrix(NA,n.iter + 1, 3 * k + 2) # the columns are 3*k because 3 are the Gaussian parameters of length k and +2 because we want to save also the number of each iteration and the corresponding deviance
+  res[1,]  <- c(0, p, mu, sigma, deviance) # here we store the result for each i-th iteration
   
   
-  d <- d.init(y, p, mu, sigma) # E step - part 1
-  for (iter in 1:n.iter) {
+  d <- d.init(y, p, mu, sigma) # E step with the initial parameters
+  r <- matrix(NA, k, len.y) # initialization of the responsabilities matrix 
+  for (iter in 1:n.iter) { # start i-th iteration
     
-    # E step - part 2
-    r <- matrix(NA, k, len.y)
+    # E step - computes the responsabilites for each observation
     for(i in 1:k) {
       r[i,] <- d[i,] / colSums(d)
     }
     
-    # M step
+    # M step - update the theta parameters for the Gaussian components
     for(i in 1:k) {
       p[i] <- mean(r[i,])
       mu[i] <- sum(r[i,] * y) / sum(r[i,])
       sigma[i] <- sqrt(sum(r[i,] * (y^2)) / sum(r[i,]) - (mu[i])^2)
     }
     
-    # -2 x log-likelihood (a.k.a. deviance)
     like <- likelihood(y, p, mu, sigma)
     
+    # -2 x log-likelihood (a.k.a. deviance)
     deviance <- -2 * sum( log(like) )
     
-    # Save
+    # Save the results of the i-th iteration
     res[iter+ 1,] <- c(iter, p, mu, sigma, deviance)
     
-    # E step - part 1.1
+    # E step - update probabilities matrix
     d <- d.init(y, p, mu, sigma) 
     
     # Plot
@@ -112,15 +124,117 @@ handmade.em <- function(y, p, mu, sigma, n.iter, plot.flag = T)
       set.seed(123)
       points(jitter(y), rep(0,length(y)), 
              pch = 19, cex = .6, 
-             col = assign.color(cols, d))
+             col = assign.color(cols, d)) # assigns the colors to the observation point
       curve(likelihood(x, p, mu, sigma),
             lwd = 4, col = rgb(0,0,0,.5), add = TRUE)
       Sys.sleep(1.5)
     }
   }
+  
   res <- data.frame(res)
-  names(res) <- c("iteration", paste("p", 1:k, sep=""), paste("mu", 1:k, sep=""), paste("sigma", 1:k, sep=""), "deviance")
-  out <- list(parameters = c(p = p, mu = mu, sigma = sigma), deviance = deviance, res = res)
+  names(res) <- c("iteration", paste("p", 1:k, sep=""), paste("mu", 1:k, sep=""), paste("sigma", 1:k, sep=""), "deviance") # generalize the number of columns with k components parameters
+  out <- list(parameters = c(p = p, mu = mu, sigma = sigma), deviance = deviance, res = res) # return the final result
   return(out)
 }
 ```
+
+# Test EM-fit with different sample sizes
+
+We pick two different sample sizes $n_1 < n_2$, in order to study the behavior of the algorithm in a clearly non-asymptotic regime and in a reasonably asymptotic one.
+
+We define the following function in oder to random initialize parameters of the model
+
+```{r}
+initialize.parameters <- function(y, k) {
+  p <- rep(1/k, k) # equally weight the k components
+  mu    <- runif(k, min = 0.1, max= 0.9) # generate random k means parameters
+  sigma <- runif(k, min = 0.1, max = 0.9) # generate random k sigma parameters
+  
+  return(list(p = p, mu = mu, sigma = sigma)) # return the list of generated parameters 
+}
+```
+
+The data we are going to use come from the Bart distribution which is computed by the following function
+
+```{r message=FALSE, warning=FALSE}
+require(mixtools) # import the library in order to generate the MoG
+
+bart.samples <- function(n) {
+  return( rnormmix(n,
+                   lambda = c(0.5, rep(0.1,5)),
+                   mu = c(0, ((0:4)/2)-1),
+                   sigma = c(1, rep(0.1,5)) ))
+}
+```
+
+```{r include=FALSE}
+plot.curve <- function(y, p, mu, sigma, n.iter) { # useful to plot the final result iteration
+  cols <- randomColor(count = length(p), 
+                    hue = c(" ", "random", "red", "orange", "yellow", "green", "blue", "purple", "pink", "monochrome"), 
+                    luminosity = c(" ", "random", "light", "bright", "dark"))
+  d <- d.init(y, p, mu, sigma)
+    
+  hist(y, prob = T, breaks = 50, col = gray(.8), border = NA, 
+     main = "", xlab = paste("EM Iteration: ", n.iter, sep = ""))
+  set.seed(123)
+  points(jitter(y), rep(0,length(y)), 
+         pch = 19, cex = .6, 
+         col = assign.color(cols, d))
+  curve(likelihood(x, p, mu, sigma),
+        lwd = 4, col = rgb(0,0,0,.5), add = TRUE)
+}
+```
+
+## Non-Asymptotic regime
+
+```{r}
+n1 <- 25 # Sample size that follows a non-asymptotic way
+XX <- bart.samples(n1)
+
+parameters <- initialize.parameters(XX, k=6) # k is equal to six according to the bart distribution
+
+#extract the corresponding gaussian parameters
+p <- parameters$p 
+mu <- parameters$mu 
+sigma <- parameters$sigma
+
+# executed the handmade.em function for twenty iterations
+out1 <- handmade.em(XX, p, mu, sigma, n.iter = 20, plot.flag = F)
+plot.curve(XX, p, mu, sigma, n.iter = 20)
+```
+
+## Asymptotic regime
+
+```{r}
+n2 <- 2000 # Sample size that follows a reasonably asymptotic way
+XX <- bart.samples(n2)
+
+parameters <- initialize.parameters(XX, k=6) # k is equal to six according to the bart distribution
+
+#extract the corresponding gaussian parameters
+p <- parameters$p 
+mu <- parameters$mu 
+sigma <- parameters$sigma
+
+# executed the handmade.em function for twenty iterations
+out2 <- handmade.em(XX, p, mu, sigma, n.iter = 20, plot.flag = F)
+plot.curve(XX, p, mu, sigma, n.iter = 20)
+```
+
+<!-- add a out1 and out2 plots -->
+
+## The reasons of these results?
+
+Our initial expectations are confirmed. With the Law of Large Numbers and the Central Limit Theorem the number of samples are significant in order to follow the true distribution. The LLN rule says that we can achieve the real first moment distribution increasing the number of samples and with the CLT we can see if the distribution follows the Gaussian shape.
+
+# Model Selection
+
+<!-- little describw -->
+
+<!-- add metric functions: AIC, BIC etc.. -->
+
+<!-- results of the metrics (for loop) ... try something new :D -->
+
+# Final comments
+
+<!-- describe the results and gives the final comments -->

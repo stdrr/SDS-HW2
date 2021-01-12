@@ -227,13 +227,334 @@ plot.curve(XX, p, mu, sigma, n.iter = 20)
 
 Our initial expectations are confirmed. With the Law of Large Numbers and the Central Limit Theorem the number of samples are significant in order to follow the true distribution. The LLN rule says that we can achieve the real first moment distribution increasing the number of samples and with the CLT we can see if the distribution follows the Gaussian shape.
 
+$$~$$
+
 # Model Selection
 
-<!-- little describw -->
+In this section we introduce different methods in order to find the best k components for these particular sample sizes distributed from a bart density.
 
-<!-- add metric functions: AIC, BIC etc.. -->
+## AIC (Akaike Information Criterion)
 
-<!-- results of the metrics (for loop) ... try something new :D -->
+The AIC method is used for the model selection, it adds a penalization proportional to the complexity of the models: the more complex the model is the more relevant is the penalization.
+
+$$AIC = 2 \cdot l_j(\hat\theta_j) - 2 \cdot dim(\Theta_j)$$
+
+where:
+
+- $\hat\theta$  is the vector of estimated parameters
+- $l_j$ is the likelihood function
+- $dim(\Theta)$ is the number of the model parameters
+
+$$~$$
+
+```{r}
+AIC <- function(y, kmax, n.iter) {
+  aic.j <- c()
+  
+  for (k in 1:kmax){
+    parameters <- initialize.parameters(y, k) # randomly initialize parameters
+    p <- parameters$p
+    mu <- parameters$mu
+    sigma <- parameters$sigma 
+    
+    out.opt <- handmade.em(y, p, mu, sigma, n.iter = n.iter, plot.flag = F)$parameters # get the estimated parameters
+    
+    p <- out.opt[1:k]
+    mu <- out.opt[(k+1):(2*k)]
+    sigma <- out.opt[(2*k+1):(3*k)]
+      
+    like <- likelihood(y, p, mu, sigma) # calculate the likelihood with the previous estimated parameters
+
+    aic.j <- c(aic.j, 2 * sum(log(like)) - 2 * (3*k-1)) # calculate the AIC #### DESCRIBE WELL
+  }
+  
+  best.k <- which.max(aic.j) # return the index of the k component the maximize the score 
+  return(best.k)
+}
+```
+
+$$~$$
+
+## BIC (Bayesian Information Criterion)
+
+As AIC, the BIC method is used for the model selection. It penalizes more the model when the model complexity increases.
+
+$$BIC = l_j(\hat\theta_j) - \frac{\log(n)}{2} \cdot dim(\Theta_j)$$
+
+where:
+
+- $\hat\theta$  is the vector of estimated parameters
+- $l_j$ is the likelihood function
+- $dim(\Theta)$ is the number of the model parameters
+- $n$ is the sample size
+
+$$~$$
+
+```{r}
+BIC <- function(y, kmax, n.iter) {
+  bic.j <- c()
+  len.y <- length(y)
+  
+  for (k in 1:kmax){
+    parameters <- initialize.parameters(y, k) # randomly initialize parameters
+    p <- parameters$p 
+    mu <- parameters$mu 
+    sigma <- parameters$sigma
+      
+    out.opt <- handmade.em(y, p, mu, sigma, n.iter = n.iter, plot.flag = F)$parameters # get the estimated parameters
+    
+    p <- out.opt[1:k]
+    mu <- out.opt[(k+1):(2*k)]
+    sigma <- out.opt[(2*k+1):(3*k)]
+    
+    like <- likelihood(y, p, mu, sigma) # calculate the likelihood with the previous estimated parameters
+    
+    bic.j <- c(bic.j, sum(log(like)) - log(len.y)/2 * (3*k-1)) # calculate the AIC #### DESCRIBE WELL
+  }
+  
+  best.k <- which.max(bic.j) # return the index of the k component the maximize the score 
+  return(best.k)
+}
+```
+
+$$~$$
+
+## Sample Splittings
+
+This particular method divides randomly the main dataset into training and test set given a percentage of this splits. After that, we estimate the model parameters using the training set and we evaluate the "goodness" of the estimations using the test set.
+
+$$~$$
+
+```{r}
+split.data <- function(y, perc) {
+  size.s <- floor(perc * length(y)) # catch the number of observations at x%
+  trainIndex <- sample(seq_len(length(y)), size = size.s) # randomly selection of n observations
+  return (trainIndex)
+}
+
+training.model <- function(y.train, y.test, kmax, n.iter) {
+  like.j <- c()
+  
+  for (k in 1:kmax){
+    parameters <- initialize.parameters(y.train, k) # randomly initialize parameters
+    p <- parameters$p 
+    mu <- parameters$mu 
+    sigma <- parameters$sigma
+    
+    out.opt <- handmade.em(y.train, p, mu, sigma, n.iter = n.iter, plot.flag = F)$parameters # get the estimated parameters
+    
+    p <- out.opt[1:k]
+    mu <- out.opt[(k+1):(2*k)]
+    sigma <- out.opt[(2*k+1):(3*k)]
+    
+    like <- likelihood(y.test, p, mu, sigma) # calculate the likelihood with the previous estimated parameters
+    
+    like.j <- c(like.j, sum(log(like)))
+  }
+  
+  best.k <- which.max(like.j) # return the index of the k component the maximize the score 
+  return(best.k)
+}
+```
+
+$$~$$
+
+## K-Fold Cross-Validation
+
+This method used in model selection randomly divides the observations into k folds of approximately equal size. This choose one fold as test set and the other ones are used as training set in order to fit the model.
+
+$$~$$
+
+```{r message=FALSE, warning=FALSE}
+library(caret) # import the dataset in order to crate the foldes
+
+k.fold.cross.validation <- function(y, k.folds, kmax, n.iter) {
+  best.cross.v <- c() 
+  expectations <- c()
+  like.j <- c()
+  
+  lst.k.folds <- createFolds(y, k = k.folds, list = TRUE, returnTrain = FALSE) # create k folds with n observations
+  
+  fold.names <- names(lst.k.folds)
+  for (k in 1:kmax) { # train the model kmax iterations
+    for (x in 1:k.folds) { # train each fold k times
+      # divide the observations
+      n.k.fold <- fold.names[x]
+      
+      test.set <- y[unlist(lst.k.folds[n.k.fold], use.names=FALSE)]            
+      train.set <- y[-unlist(lst.k.folds[n.k.fold], use.names = FALSE)]          
+      
+      # randomly initialize parameters
+      parameters <- initialize.parameters(train.set, k) 
+      p <- parameters$p 
+      mu <- parameters$mu 
+      sigma <- parameters$sigma
+      
+      # get the estimated parameters
+      out.opt <- handmade.em(train.set, p, mu, sigma, n.iter = n.iter, plot.flag = F)$parameters 
+      
+      p <- out.opt[1:k]
+      mu <- out.opt[(k+1):(2*k)]
+      sigma <- out.opt[(2*k+1):(3*k)]
+      
+      # calculate the likelihood with the previous estimated parameters
+      like <- likelihood(test.set, p, mu, sigma)  
+      
+      # for each fold calculate the mean of the log-likelihood
+      like.j <- c(like.j, mean(log(like)))
+    }
+    
+    # save the i-th expectation
+    expectations <- c(expectations, mean(like.j))
+  }
+
+  best.cross.v <- which.max(expectations) # return the index of the k component the maximize the score
+  return(best.cross.v)
+}
+```
+
+$$~$$
+
+## Wasserstein
+
+The Wasserstein distance is a distance function defined between probability distributions on a given metric space. For our work we evaluate this formula:
+
+$$W_k = \int_0^1 |{F_k^{-1}(z|\hat\theta_{Tr})-\hat F_{Te}^{-1}(z)}| dz$$
+
+
+where:
+
+- $F_k^{-1}(z|\hat\theta_{Tr})$ is the quantile function of a k components MoG
+- $F_{Te}^{-1}(z)$ denotes the quantile function of the true population model
+
+$$~$$
+
+```{r message=FALSE, warning=FALSE}
+library(KScorrect) # import this library in order to apply the integrate function
+
+wass.score <- function(y.train, y.test, kmax, n.iter) { # routine function useful to apply the Wasserstein formula
+  f <- function(z, p, mu, sigma, y.test) {
+    return(abs(qmixnorm(p = z, mean = mu, sd = sigma, pro = p) - quantile(y.test, probs = z)))
+  }
+  
+  wass.sc <- c();
+  
+  for (k in 1:kmax){
+    parameters <- initialize.parameters(y.train, k) # randomly initialize parameters
+    p <- parameters$p 
+    mu <- parameters$mu 
+    sigma <- parameters$sigma
+    
+    out.opt <- handmade.em(y.train, p, mu, sigma, n.iter = n.iter, plot.flag = F)$parameters # get the estimated
+    
+    p <- out.opt[1:k]
+    mu <- out.opt[(k+1):(2*k)]
+    sigma <- out.opt[(2*k+1):(3*k)]
+    
+    wass.sc <- c(wass.sc, integrate(f, lower = 0, upper = 1,
+                                    p = p, mu = mu, sigma = sigma, y.test = y.test, 
+                                    rel.tol=.Machine$double.eps^.05)$value) # execute the integral in order to have the score
+  }
+  
+  best.wass <- which.min(wass.sc) # return the index of the k component the minimize the score
+  return(best.wass)
+}
+```
+
+$$~$$
+
+# ...Do Simulations!
+
+We define a routine function in order to simulate M times the samples from a bart density. 
+
+$$~$$
+
+```{r}
+do.simulate <- function(n, M, n.iter, kmax) {
+  max.k <- function(res) { # return the max indexes of k components
+    k <- 0
+    max <- -1
+    for(i in 1:length(res)) {
+      if(max <= res[i] && k < i) {
+        k <- i
+        max <- res[i]
+      }
+    }
+    return(k)
+  }
+
+  #initialization of parameters
+  best.score50and50 <- c(); best.score70and30 <- c(); best.score30and70 <- c();
+  best.aic.k <- c(); best.bic.k <- c();
+  best.cross.validation5 <- c(); best.cross.validation10 <- c();
+  
+  wasses <- c();
+  
+  # M simulations starting now..
+  for (i in 1:M) {
+    XX <- bart.samples(n)
+    
+    # find the best k components with AIC
+    best.aic.k <- c(best.aic.k, AIC(XX, kmax=kmax, n.iter))
+    
+    best.bic.k <- c(best.bic.k, BIC(XX, kmax=kmax, n.iter))
+    
+    # 50% Training-Test
+    indexes50.50 <- split.data(XX, perc=0.5)
+    XX.Train50 <- XX[indexes50.50]
+    XX.Test50 <- XX[-indexes50.50]
+    
+    best.score50and50 <- c(best.score50and50, training.model(XX.Train50, XX.Test50, kmax=kmax, n.iter))
+    
+    # 70%-30% Training-Test
+    indexes70.30 <- split.data(XX, perc=0.7)
+    XX.Train70 <- XX[indexes70.30]
+    XX.Test30 <- XX[-indexes70.30]
+    
+    best.score70and30 <- c(best.score70and30, training.model(XX.Train70, XX.Test30, kmax=kmax, n.iter))
+    
+    # 30%-70% Training-Test
+    indexes30.70 <- split.data(XX, perc=0.3)
+    XX.Train30 <- XX[indexes30.70]
+    XX.Test70 <- XX[-indexes30.70]
+    
+    best.score30and70 <- c(best.score30and70, training.model(XX.Train30, XX.Test70, kmax=kmax, n.iter))
+    
+    # K-Fold Cross-Validation
+    best.cross.validation5 <- c(best.cross.validation5, k.fold.cross.validation(XX, k.folds=5, kmax=kmax, n.iter))
+    best.cross.validation10 <- c(best.cross.validation10, k.fold.cross.validation(XX, k.folds=10, kmax=kmax, n.iter))
+    
+    #Wass score
+    #wasses <- c(wasses, wass.score(XX.Train50, XX.Test50, kmax=kmax, n.iter))
+  }
+  
+  return( data.frame( AIC = max.k(tabulate(best.aic.k)), 
+                      BIC = max.k(tabulate(best.bic.k)),
+                      Split50_50 = max.k(tabulate(best.score50and50)),
+                      Split70_30 = max.k(tabulate(best.score70and30)),
+                      Split30_70 = max.k(tabulate(best.score30and70)),
+                      five_fold_cv = max.k(tabulate(best.cross.validation5)),
+                      ten_fold_cv = max.k(tabulate(best.cross.validation10)),
+                      #wass_score = max.k(tabulate(wasses)),
+                      
+                      row.names = "kmax")
+  )
+}
+```
+
+$$~$$
+
+Start to simulate with n1 and n2 samples size defined above.
+
+```{r}
+# try to simulate with n1 = 25 
+do.simulate(n1, M=10, n.iter=20, kmax=6)
+
+# try to simulate with n1 = 2000 
+do.simulate(n2, M=10, n.iter=20, kmax=6)
+```
+
+$$~$$
 
 # Final comments
 

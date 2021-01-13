@@ -112,7 +112,7 @@ handmade.em <- function(y, p, mu, sigma, n.iter, plot.flag = T)
     deviance <- -2 * sum( log(like) )
     
     # Save the results of the i-th iteration
-    res[iter+ 1,] <- c(iter, p, mu, sigma, deviance)
+    res[iter+1, ] <- c(iter, p, mu, sigma, deviance)
     
     # E step - update probabilities matrix
     d <- d.init(y, p, mu, sigma) 
@@ -148,7 +148,7 @@ We define the following function in oder to random initialize parameters of the 
 initialize.parameters <- function(y, k) {
   p <- rep(1/k, k) # equally weight the k components
   mu    <- runif(k, min = 0.1, max= 0.9) # generate random k means parameters
-  sigma <- runif(k, min = 0.1, max = 0.9) # generate random k sigma parameters
+  sigma <- runif(k, min = 0.1, max= 0.9) # generate random k sigma parameters
   
   return(list(p = p, mu = mu, sigma = sigma)) # return the list of generated parameters 
 }
@@ -188,7 +188,7 @@ plot.curve <- function(y, p, mu, sigma, n.iter) { # useful to plot the final res
 ## Non-Asymptotic regime
 
 ```{r}
-n1 <- 25 # Sample size that follows a non-asymptotic way
+n1 <- 150 # Sample size that follows a non-asymptotic way
 XX <- bart.samples(n1)
 
 parameters <- initialize.parameters(XX, k=6) # k is equal to six according to the bart distribution
@@ -233,7 +233,7 @@ $$~$$
 
 In this section we introduce different methods in order to find the best k components for these particular sample sizes distributed from a bart density.
 
-## AIC (Akaike Information Criterion)
+## AIC (Akaike Information Criterion) & BIC (Bayesian Information Criterion)
 
 The AIC method is used for the model selection, it adds a penalization proportional to the complexity of the models: the more complex the model is the more relevant is the penalization.
 
@@ -245,11 +245,24 @@ where:
 - $l_j$ is the likelihood function
 - $dim(\Theta)$ is the number of the model parameters
 
+As AIC, the BIC method is used for the model selection. It penalizes more the model when the model complexity increases.
+
+$$BIC = l_j(\hat\theta_j) - \frac{\log(n)}{2} \cdot dim(\Theta_j)$$
+
+where:
+
+- $\hat\theta$  is the vector of estimated parameters
+- $l_j$ is the likelihood function
+- $dim(\Theta)$ is the number of the model parameters
+- $n$ is the sample size
+
+As defined below, we implement a general function in order to choose which penalty apply to the model:
+
 $$~$$
 
 ```{r}
-AIC <- function(y, kmax, n.iter) {
-  aic.j <- c()
+penalty.model <- function(y, kmax, n.iter, AIC=FALSE, BIC=FALSE) {
+  best.j <- c(); len.y <- length(y);
   
   for (k in 1:kmax){
     parameters <- initialize.parameters(y, k) # randomly initialize parameters
@@ -264,55 +277,15 @@ AIC <- function(y, kmax, n.iter) {
     sigma <- out.opt[(2*k+1):(3*k)]
       
     like <- likelihood(y, p, mu, sigma) # calculate the likelihood with the previous estimated parameters
-
-    aic.j <- c(aic.j, 2 * sum(log(like)) - 2 * (3*k-1)) # calculate the AIC #### DESCRIBE WELL
+    
+    if (AIC) {
+      best.j <- c(best.j, 2 * sum(log(like)) - 2 * (3*k-1)) # calculate the AIC #### DESCRIBE WELL
+    } else {
+      best.j <- c(best.j, sum(log(like)) - log(len.y)/2 * (3*k-1))
+    }  
   }
   
-  best.k <- which.max(aic.j) # return the index of the k component the maximize the score 
-  return(best.k)
-}
-```
-
-$$~$$
-
-## BIC (Bayesian Information Criterion)
-
-As AIC, the BIC method is used for the model selection. It penalizes more the model when the model complexity increases.
-
-$$BIC = l_j(\hat\theta_j) - \frac{\log(n)}{2} \cdot dim(\Theta_j)$$
-
-where:
-
-- $\hat\theta$  is the vector of estimated parameters
-- $l_j$ is the likelihood function
-- $dim(\Theta)$ is the number of the model parameters
-- $n$ is the sample size
-
-$$~$$
-
-```{r}
-BIC <- function(y, kmax, n.iter) {
-  bic.j <- c()
-  len.y <- length(y)
-  
-  for (k in 1:kmax){
-    parameters <- initialize.parameters(y, k) # randomly initialize parameters
-    p <- parameters$p 
-    mu <- parameters$mu 
-    sigma <- parameters$sigma
-      
-    out.opt <- handmade.em(y, p, mu, sigma, n.iter = n.iter, plot.flag = F)$parameters # get the estimated parameters
-    
-    p <- out.opt[1:k]
-    mu <- out.opt[(k+1):(2*k)]
-    sigma <- out.opt[(2*k+1):(3*k)]
-    
-    like <- likelihood(y, p, mu, sigma) # calculate the likelihood with the previous estimated parameters
-    
-    bic.j <- c(bic.j, sum(log(like)) - log(len.y)/2 * (3*k-1)) # calculate the AIC #### DESCRIBE WELL
-  }
-  
-  best.k <- which.max(bic.j) # return the index of the k component the maximize the score 
+  best.k <- which.max(best.j) # return the index of the k component the maximize the score 
   return(best.k)
 }
 ```
@@ -391,7 +364,7 @@ k.fold.cross.validation <- function(y, k.folds, kmax, n.iter) {
       sigma <- parameters$sigma
       
       # get the estimated parameters
-      out.opt <- handmade.em(train.set, p, mu, sigma, n.iter = n.iter, plot.flag = F)$parameters 
+      out.opt <- handmade.em(train.set, p, mu, sigma, n.iter = n.iter, plot.flag = F)$parameters
       
       p <- out.opt[1:k]
       mu <- out.opt[(k+1):(2*k)]
@@ -434,7 +407,8 @@ library(KScorrect) # import this library in order to apply the integrate functio
 
 wass.score <- function(y.train, y.test, kmax, n.iter) { # routine function useful to apply the Wasserstein formula
   f <- function(z, p, mu, sigma, y.test) {
-    return(abs(qmixnorm(p = z, mean = mu, sd = sigma, pro = p) - quantile(y.test, probs = z)))
+    res <- abs(qmixnorm(p = z, mean = mu, sd = sigma, pro = p) - quantile(y.test, probs = z))
+    return(res)
   }
   
   wass.sc <- c();
@@ -495,9 +469,9 @@ do.simulate <- function(n, M, n.iter, kmax) {
     XX <- bart.samples(n)
     
     # find the best k components with AIC
-    best.aic.k <- c(best.aic.k, AIC(XX, kmax=kmax, n.iter))
+    best.aic.k <- c(best.aic.k, penalty.model(XX, kmax=kmax, n.iter, AIC=TRUE))
     
-    best.bic.k <- c(best.bic.k, BIC(XX, kmax=kmax, n.iter))
+    best.bic.k <- c(best.bic.k, penalty.model(XX, kmax=kmax, n.iter, BIC=TRUE))
     
     # 50% Training-Test
     indexes50.50 <- split.data(XX, perc=0.5)
@@ -525,7 +499,7 @@ do.simulate <- function(n, M, n.iter, kmax) {
     best.cross.validation10 <- c(best.cross.validation10, k.fold.cross.validation(XX, k.folds=10, kmax=kmax, n.iter))
     
     #Wass score
-    #wasses <- c(wasses, wass.score(XX.Train50, XX.Test50, kmax=kmax, n.iter))
+    wasses <- c(wasses, wass.score(XX.Train50, XX.Test50, kmax=kmax, n.iter))
   }
   
   return( data.frame( AIC = max.k(tabulate(best.aic.k)), 
@@ -535,7 +509,7 @@ do.simulate <- function(n, M, n.iter, kmax) {
                       Split30_70 = max.k(tabulate(best.score30and70)),
                       five_fold_cv = max.k(tabulate(best.cross.validation5)),
                       ten_fold_cv = max.k(tabulate(best.cross.validation10)),
-                      #wass_score = max.k(tabulate(wasses)),
+                      wass_score = max.k(tabulate(wasses)),
                       
                       row.names = "kmax")
   )
@@ -548,14 +522,29 @@ Start to simulate with n1 and n2 samples size defined above.
 
 ```{r}
 # try to simulate with n1 = 25 
-do.simulate(n1, M=10, n.iter=20, kmax=6)
+do.simulate(n1, M=50, n.iter=20, kmax=8)
 
 # try to simulate with n1 = 2000 
-do.simulate(n2, M=10, n.iter=20, kmax=6)
+do.simulate(n2, M=50, n.iter=20, kmax=8)
 ```
 
 $$~$$
 
 # Final comments
 
+# Plots
+
 <!-- describe the results and gives the final comments -->
+
+<!-- Remark the previous results about non-asymptotic and asymptotic regime -->
+
+<!--
+PLOT & SUMMARY
+  Considering a plot for AIC and BIC where there is k on x axis and score on y axis
+  Considering a plot for K-folds where there is k on x axis and score on y axis
+  Considering a plot for Splits where there is k on x axis and score on y axis
+  
+  Considering a scatterplot for wass score and see the correlation & covariance between data and the max score
+  
+  for the best kmax plot the bart distro
+-->

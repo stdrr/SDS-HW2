@@ -261,8 +261,9 @@ As defined below, we implement a general function in order to choose which penal
 $$~$$
 
 ```{r}
-penalty.model <- function(y, kmax, n.iter, AIC=FALSE, BIC=FALSE) {
-  best.j <- c(); len.y <- length(y);
+get.AIC.BIC <- function(y, kmax, n.iter) {
+  len.y <- length(y);
+  aic.score <- c(); bic.score <- c()
   
   for (k in 1:kmax){
     parameters <- initialize.parameters(y, k) # randomly initialize parameters
@@ -277,16 +278,14 @@ penalty.model <- function(y, kmax, n.iter, AIC=FALSE, BIC=FALSE) {
     sigma <- out.opt[(2*k+1):(3*k)]
       
     like <- likelihood(y, p, mu, sigma) # calculate the likelihood with the previous estimated parameters
-    
-    if (AIC) {
-      best.j <- c(best.j, 2 * sum(log(like)) - 2 * (3*k-1)) # calculate the AIC #### DESCRIBE WELL
-    } else {
-      best.j <- c(best.j, sum(log(like)) - log(len.y)/2 * (3*k-1))
-    }  
-  }
   
-  best.k <- which.max(best.j) # return the index of the k component the maximize the score 
-  return(best.k)
+    aic.score <- c(aic.score, 2 * sum(log(like)) - 2 * (3*k-1)) # calculate the AIC #### DESCRIBE WELL
+    bic.score <- c(bic.score, sum(log(like)) - log(len.y)/2 * (3*k-1))
+  }
+  res <- list()
+  res[["best_AIC"]] <- which.max(aic.score) # return the index of the k component the maximize the score 
+  res[["best_BIC"]] <- which.max(bic.score)
+  return(res)
 }
 ```
 
@@ -469,9 +468,10 @@ do.simulate <- function(n, M, n.iter, kmax) {
     XX <- bart.samples(n)
     
     # find the best k components with AIC
-    best.aic.k <- c(best.aic.k, penalty.model(XX, kmax=kmax, n.iter, AIC=TRUE))
+    res.AIC.BIC <- get.AIC.BIC(XX, kmax = kmax, n.iter = n.iter)
+    best.aic.k <- c(best.aic.k, res.AIC.BIC[["best_AIC"]])
     
-    best.bic.k <- c(best.bic.k, penalty.model(XX, kmax=kmax, n.iter, BIC=TRUE))
+    best.bic.k <- c(best.bic.k, res.AIC.BIC[["best_BIC"]])
     
     # 50% Training-Test
     indexes50.50 <- split.data(XX, perc=0.5)
@@ -502,17 +502,28 @@ do.simulate <- function(n, M, n.iter, kmax) {
     wasses <- c(wasses, wass.score(XX.Train50, XX.Test50, kmax=kmax, n.iter))
   }
   
-  return( data.frame( AIC = max.k(tabulate(best.aic.k)), 
-                      BIC = max.k(tabulate(best.bic.k)),
-                      Split50_50 = max.k(tabulate(best.score50and50)),
-                      Split70_30 = max.k(tabulate(best.score70and30)),
-                      Split30_70 = max.k(tabulate(best.score30and70)),
-                      five_fold_cv = max.k(tabulate(best.cross.validation5)),
-                      ten_fold_cv = max.k(tabulate(best.cross.validation10)),
-                      wass_score = max.k(tabulate(wasses)),
-                      
-                      row.names = "kmax")
-  )
+  return(list(AIC = best.aic.k, 
+              BIC = best.bic.k,
+              Split50_50 = best.score50and50,
+              Split70_30 = best.score70and30,
+              Split30_70 = best.score30and70,
+              five_fold_cv = best.cross.validation5,
+              ten_fold_cv = best.cross.validation10,
+              wass_score = wasses
+              )
+         )
+  
+  # return( data.frame( AIC = max.k(tabulate(best.aic.k)), 
+  #                     BIC = max.k(tabulate(best.bic.k)),
+  #                     Split50_50 = max.k(tabulate(best.score50and50)),
+  #                     Split70_30 = max.k(tabulate(best.score70and30)),
+  #                     Split30_70 = max.k(tabulate(best.score30and70)),
+  #                     five_fold_cv = max.k(tabulate(best.cross.validation5)),
+  #                     ten_fold_cv = max.k(tabulate(best.cross.validation10)),
+  #                     wass_score = max.k(tabulate(wasses)),
+  #                     
+  #                     row.names = "kmax")
+  #)
 }
 ```
 
@@ -521,7 +532,7 @@ $$~$$
 Start to simulate with n1 and n2 samples size defined above.
 
 ```{r}
-# try to simulate with n1 = 25 
+# try to simulate with n1 = 150 
 do.simulate(n1, M=50, n.iter=20, kmax=8)
 
 # try to simulate with n1 = 2000 
@@ -548,3 +559,36 @@ PLOT & SUMMARY
   
   for the best kmax plot the bart distro
 -->
+
+```{r}
+train.model <- function(y, n.iter, kmax) {
+  out <- c(rep(0, kmax))
+  for (k in 1:kmax){
+    parameters <- initialize.parameters(y.train, k) # randomly initialize parameters
+    p <- parameters$p 
+    mu <- parameters$mu 
+    sigma <- parameters$sigma
+    
+    out[k] <- handmade.em(y.train, p, mu, sigma, n.iter = n.iter, plot.flag = F) # get the estimated
+  }
+  return(out)
+}
+```
+
+
+```{r}
+kmax <- 8
+res <- do.simulate(n = n1, M = 100, n.iter = 20, kmax = kmax)
+hist(res[["AIC"]], main = "")
+```
+
+```{r}
+freq.aic <- tabulate(res[["AIC"]])
+freq.bic <- tabulate(res[["BIC"]])
+plot(1:length(freq.aic), freq.aic,
+     main = "K distribution across M=100 simulations", xlab="k components", ylab="Frequency",
+     lty=3, lwd = 3, type = "b", pch = 21, col=gray(.6), xlim = c(1, kmax), ylim = c(1, 100))
+lines(1:length(freq.bic), freq.bic,
+     lty=3, lwd = 3, type = "b", pch = 21, col=gray(.6))
+```
+

@@ -200,7 +200,7 @@ sigma <- parameters$sigma
 
 # executed the handmade.em function for twenty iterations
 out1 <- handmade.em(XX, p, mu, sigma, n.iter = 20, plot.flag = F)
-plot.curve(XX, p, mu, sigma, n.iter = 20)
+plot.curve(XX, out1$parameters[1:6], out1$parameters[7:12], out1$parameters[13:18], n.iter = 20)
 ```
 
 ## Asymptotic regime
@@ -218,7 +218,7 @@ sigma <- parameters$sigma
 
 # executed the handmade.em function for twenty iterations
 out2 <- handmade.em(XX, p, mu, sigma, n.iter = 20, plot.flag = F)
-plot.curve(XX, p, mu, sigma, n.iter = 20)
+plot.curve(XX, out2$parameters[1:6], out2$parameters[7:12], out2$parameters[13:18], n.iter = 20)
 ```
 
 <!-- add a out1 and out2 plots -->
@@ -429,7 +429,7 @@ wass.score <- function(y.train, y.test, kmax, n.iter) { # routine function usefu
                                     rel.tol=.Machine$double.eps^.05)$value) # execute the integral in order to have the score
   }
   
-  best.wass <- which.min(wass.sc) # return the index of the k component the minimize the score
+  best.wass <- wass.sc # return the index of the k component the minimize the score
   return(best.wass)
 }
 ```
@@ -461,7 +461,9 @@ do.simulate <- function(n, M, n.iter, kmax) {
   best.aic.k <- c(); best.bic.k <- c();
   best.cross.validation5 <- c(); best.cross.validation10 <- c();
   
-  wasses <- c();
+  wasses <- c(); 
+  
+  wasses.scores <- data.frame(matrix(ncol=2,nrow=0, dimnames=list(NULL, c("k.component", "score"))))
   
   # M simulations starting now..
   for (i in 1:M) {
@@ -499,17 +501,20 @@ do.simulate <- function(n, M, n.iter, kmax) {
     best.cross.validation10 <- c(best.cross.validation10, k.fold.cross.validation(XX, k.folds=10, kmax=kmax, n.iter))
     
     #Wass score
-    wasses <- c(wasses, wass.score(XX.Train50, XX.Test50, kmax=kmax, n.iter))
+    wasses.scores <- rbind(wasses.scores, data.frame( k.component = 1:kmax, 
+                                                      score = wass.score(XX.Train50, XX.Test50, kmax=kmax, n.iter) ) )
+    wasses <- c(wasses, which.min(wass.score(XX.Train50, XX.Test50, kmax=kmax, n.iter)))
   }
   
-  return(list(AIC = best.aic.k, 
-              BIC = best.bic.k,
-              Split50_50 = best.score50and50,
-              Split70_30 = best.score70and30,
-              Split30_70 = best.score30and70,
-              five_fold_cv = best.cross.validation5,
-              ten_fold_cv = best.cross.validation10,
-              wass_score = wasses
+  return(list(  AIC = best.aic.k, 
+                BIC = best.bic.k,
+                Split50_50 = best.score50and50,
+                Split70_30 = best.score70and30,
+                Split30_70 = best.score30and70,
+                five_fold_cv = best.cross.validation5,
+                ten_fold_cv = best.cross.validation10,
+                wass_score_k = wasses,
+                wasses_scores = wasses.scores
               )
          )
   
@@ -532,18 +537,18 @@ $$~$$
 Start to simulate with n1 and n2 samples size defined above.
 
 ```{r}
+kmax <- 8
+
 # try to simulate with n1 = 150 
-do.simulate(n1, M=50, n.iter=20, kmax=8)
+res.n1 <- do.simulate(n1, M=50, n.iter=20, kmax=kmax)
 
 # try to simulate with n1 = 2000 
-do.simulate(n2, M=50, n.iter=20, kmax=8)
+res.n2 <- do.simulate(n2, M=50, n.iter=20, kmax=kmax)
 ```
 
 $$~$$
 
 # Final comments
-
-# Plots
 
 <!-- describe the results and gives the final comments -->
 
@@ -551,12 +556,6 @@ $$~$$
 
 <!--
 PLOT & SUMMARY
-  Considering a plot for AIC and BIC where there is k on x axis and score on y axis
-  Considering a plot for K-folds where there is k on x axis and score on y axis
-  Considering a plot for Splits where there is k on x axis and score on y axis
-  
-  Considering a scatterplot for wass score and see the correlation & covariance between data and the max score
-  
   for the best kmax plot the bart distro
 -->
 
@@ -575,20 +574,110 @@ train.model <- function(y, n.iter, kmax) {
 }
 ```
 
+# Plot & summaries
 
-```{r}
-kmax <- 8
-res <- do.simulate(n = n1, M = 100, n.iter = 20, kmax = kmax)
-hist(res[["AIC"]], main = "")
+We are focussing on each iteration for each model that we picked in order to display the k components in order to the proper frequency of it:
+
+```{r include=FALSE}
+plot.AIC.BIC <- function(res, n) {
+  freq.aic <- tabulate(res[["AIC"]])
+  freq.bic <- tabulate(res[["BIC"]])
+  plot(1:length(freq.aic), freq.aic,
+       main = paste("K distribution with ", n, " samples across M=100 simulations", sep=""), xlab="k components", ylab="Frequency",
+       lty=3, lwd = 3, type = "b", pch = 21, col="red", xlim = c(1, kmax), ylim = c(1, 100))
+  lines(1:length(freq.bic), freq.bic,
+        lty=3, lwd = 3, type = "b", pch = 21, col="blue")
+  legend(7, 95, legend=c("AIC", "BIC"),
+         col=c("red", "blue"), lty=2, cex=0.8) 
+}
+
+plot.Splittings <- function(res, n) {
+  freq.Split50_50 <- tabulate(res[["Split50_50"]])
+  freq.Split70_30 <- tabulate(res[["Split70_30"]])
+  freq.Split30_70 <- tabulate(res[["Split30_70"]])
+  
+  plot(1:length(freq.Split50_50), freq.Split50_50,
+       main = paste("K distribution with ", n, " samples across M=100 simulations", sep=""), xlab="k components", ylab="Frequency",
+       lty=3, lwd = 3, type = "b", pch = 21, col="red", xlim = c(1, kmax), ylim = c(1, 100))
+  lines(1:length(freq.Split70_30), freq.Split70_30,
+       lty=3, lwd = 3, type = "b", pch = 21, col="blue")
+  lines(1:length(freq.Split30_70), freq.Split30_70,
+       lty=3, lwd = 3, type = "b", pch = 21, col="green")
+  legend(6.3, 95, legend=c("Split 50-50%", "Split 70-30%", "Split 30-70%"),
+         col=c("red", "blue", "green"), lty=2, cex=0.8)
+}
+
+plot.kfolds <- function(res, n) {
+  freq.five_fold_cv <- tabulate(res[["five_fold_cv"]])
+  freq.ten_fold_cv <- tabulate(res[["ten_fold_cv"]])
+  
+  plot(1:length(freq.five_fold_cv), freq.five_fold_cv,
+       main = paste("K distribution with ", n, " samples across M=100 simulations", sep=""), xlab="k components", ylab="Frequency",
+       lty=3, lwd = 3, type = "b", pch = 21, col="red", xlim = c(1, kmax), ylim = c(1, 100))
+  lines(1:length(freq.ten_fold_cv), freq.ten_fold_cv,
+       lty=3, lwd = 3, type = "b", pch = 21, col="blue")
+  legend(6.5, 95, legend=c("5-Fold", "10-Fold"),
+         col=c("red", "blue"), lty=2, cex=0.8)  
+}
+
+plot.wass <- function(res, n) {
+  freq.wass <- tabulate(res[["wass_score_k"]])
+  
+  plot(1:length(freq.wass), freq.wass,
+       main = paste("K distribution with ", n, " samples across M=100 simulations", sep=""), xlab="k components", ylab="Frequency Wass Score",
+       lty=3, lwd = 3, type = "b", pch = 21, col="red", xlim = c(1, kmax), ylim = c(1, 50))
+}
+
+violin.plot <- function(res, n) {
+  res$wasses_scores$k.component <- as.factor(res$wasses_scores$k.component)
+  p <- ggplot(res$wasses_scores, aes(x=k.component, y=score)) + geom_violin(trim=FALSE, aes(fill=k.component)) +
+       geom_boxplot(width=0.1) + 
+       labs(title=paste("Plot of k-component by scores with ", n, " samples"),x="k component", y = "scores") + 
+       scale_fill_brewer(palette="Dark2") + 
+       theme_minimal()
+  p 
+}
 ```
 
 ```{r}
-freq.aic <- tabulate(res[["AIC"]])
-freq.bic <- tabulate(res[["BIC"]])
-plot(1:length(freq.aic), freq.aic,
-     main = "K distribution across M=100 simulations", xlab="k components", ylab="Frequency",
-     lty=3, lwd = 3, type = "b", pch = 21, col=gray(.6), xlim = c(1, kmax), ylim = c(1, 100))
-lines(1:length(freq.bic), freq.bic,
-     lty=3, lwd = 3, type = "b", pch = 21, col=gray(.6))
+# Show plots of k components with the proper results with n1 and n2 samples
+plot.AIC.BIC(res.n1, "n1")
+plot.Splittings(res.n1, "n1")
+plot.kfolds(res.n1, "n1")
+plot.wass(res.n1, "n1")
+
+plot.AIC.BIC(res.n2, "n2")
+plot.Splittings(res.n2, "n2")
+plot.kfolds(res.n2, "n2")
+plot.wass(res.n2, "n2")
+```
+
+We want for plotting the wasses scores another type of representation with violin plot similar to box plot, but the main difference is the presence of the distribution of these data:
+
+```{r}
+violin.plot(res.n1, "n1")
+violin.plot(res.n2, "n2")
+```
+
+Now, We want to see which model has predicted really well the true kmax for the bart distribution considering kmax_true = 6:
+
+```{r include=FALSE}
+best.model.prediction <- function(res, n) {
+  kmax_true = 6; scores <- c();
+  M <- length(res$AIC) # the length of simulations
+  for (name in names(res)) {
+    if (name!="wasses_scores") {
+      perc.pred <- sum(res[[name]]==kmax_true) / M
+      scores <- c(scores, perc.pred)
+      
+      print(paste(name, ": ", perc.pred))
+    }
+  }
+  
+  print(paste("----> The best model for predicting the true kmax with", n, "samples is: ", names(res)[which.max(scores)]))
+}
+
+best.model.prediction(res.n1, "n1")
+best.model.prediction(res.n2, "n2")
 ```
 

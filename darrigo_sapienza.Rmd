@@ -106,9 +106,25 @@ handmade.em <- function(y, p, mu, sigma, n.iter, plot.flag = T)
       sigma[i] <- sqrt(sum(r[i,] * (y^2)) / sum(r[i,]) - (mu[i])^2)
     }
     
-    like <- likelihood(y, p, mu, sigma)
+    if(any(is.na(p)) || any(is.na(mu)) || any(is.na(sigma))) {
+      print(paste("converged after", iter, "iterations"))
+      p <- res[iter, 2:(k+1)]
+      mu <- res[iter, (k+2):(2*k+1)]
+      sigma <- res[iter, (2*k+2):(3*k+1)]
+      break
+    }
+    
+    collapsing <- (sigma <= 0.001)
+    sigma[collapsing] <- runif(1, min = 1, max = 2)
+    mu[collapsing] <- rnorm(n = 1, mean = mean(y), sd = sd(y))
+    
+    if(all((likelihood(y, p, mu, sigma) - like) <= 0.0001)) {
+      print(paste("1 converged after", iter, "iterations"))
+      break
+    }
     
     # -2 x log-likelihood (a.k.a. deviance)
+    like <- likelihood(y, p, mu, sigma)
     deviance <- -2 * sum( log(like) )
     
     # Save the results of the i-th iteration
@@ -284,7 +300,7 @@ get.AIC.BIC <- function(y, kmax, n.iter) {
   }
   res <- list()
   res[["best_AIC"]] <- which.max(aic.score) # return the index of the k component the maximize the score 
-  res[["best_BIC"]] <- which.max(bic.score)
+  res[["best_BIC"]] <- which.max(bic.score) # return the index of the k component the maximize the score 
   return(res)
 }
 ```
@@ -517,18 +533,7 @@ do.simulate <- function(n, M, n.iter, kmax) {
                 wasses_scores = wasses.scores
               )
          )
-  
-  # return( data.frame( AIC = max.k(tabulate(best.aic.k)), 
-  #                     BIC = max.k(tabulate(best.bic.k)),
-  #                     Split50_50 = max.k(tabulate(best.score50and50)),
-  #                     Split70_30 = max.k(tabulate(best.score70and30)),
-  #                     Split30_70 = max.k(tabulate(best.score30and70)),
-  #                     five_fold_cv = max.k(tabulate(best.cross.validation5)),
-  #                     ten_fold_cv = max.k(tabulate(best.cross.validation10)),
-  #                     wass_score = max.k(tabulate(wasses)),
-  #                     
-  #                     row.names = "kmax")
-  #)
+
 }
 ```
 
@@ -536,7 +541,7 @@ $$~$$
 
 Start to simulate with n1 and n2 samples size defined above.
 
-```{r}
+```{r echo=FALSE warning=FALSE}
 kmax <- 8
 
 # try to simulate with n1 = 150 
@@ -553,26 +558,6 @@ $$~$$
 <!-- describe the results and gives the final comments -->
 
 <!-- Remark the previous results about non-asymptotic and asymptotic regime -->
-
-<!--
-PLOT & SUMMARY
-  for the best kmax plot the bart distro
--->
-
-```{r}
-train.model <- function(y, n.iter, kmax) {
-  out <- c(rep(0, kmax))
-  for (k in 1:kmax){
-    parameters <- initialize.parameters(y.train, k) # randomly initialize parameters
-    p <- parameters$p 
-    mu <- parameters$mu 
-    sigma <- parameters$sigma
-    
-    out[k] <- handmade.em(y.train, p, mu, sigma, n.iter = n.iter, plot.flag = F) # get the estimated
-  }
-  return(out)
-}
-```
 
 # Plot & summaries
 
@@ -659,7 +644,7 @@ violin.plot(res.n1, "n1")
 violin.plot(res.n2, "n2")
 ```
 
-Now, We want to see which model has predicted really well the true kmax for the bart distribution considering kmax_true = 6:
+Now, We want to see which metric has predicted really well the true kmax for the bart distribution considering kmax_true = 6:
 
 ```{r include=FALSE}
 best.model.prediction <- function(res, n) {
@@ -667,7 +652,7 @@ best.model.prediction <- function(res, n) {
   M <- length(res$AIC) # the length of simulations
   for (name in names(res)) {
     if (name!="wasses_scores") {
-      perc.pred <- sum(res[[name]]==kmax_true) / M
+      perc.pred <- sum(res[[name]]==kmax_true) / M # this ratio represents the number of corrected classification through all M simulations
       scores <- c(scores, perc.pred)
       
       print(paste(name, ": ", perc.pred))
@@ -677,7 +662,47 @@ best.model.prediction <- function(res, n) {
   print(paste("----> The best model for predicting the true kmax with", n, "samples is: ", names(res)[which.max(scores)]))
 }
 
-best.model.prediction(res.n1, "n1")
-best.model.prediction(res.n2, "n2")
+print(best.model.prediction(res.n1, "n1"))
+print(best.model.prediction(res.n2, "n2"))
 ```
 
+We want to make different types of inferences, like seeing also the confidence interval of our n samples defined as n1=150 and n2=2000:
+
+```{r}
+# Establish the confidence interval
+confidence.interval <- function(n) {
+  x_hat <- mean(n); se_hat <- sd(n)
+  return(c(x_hat - 1.96 * se_hat, x_hat + 1.96 * se_hat))
+}
+
+n1 <- bart.samples(150)
+cf.n1 <- confidence.interval(n1)
+
+n2 <- bart.samples(2000)
+cf.n2 <- confidence.interval(n2)
+```
+
+Now, I want to say the percentage of points that fall into the region:
+
+```{r}
+falling.in.cf <- function(n, cf) {
+  return( round( sum(sapply(n, function(x) return((x >= cf[1]) && (x <= cf[2])) ) ) / length(n), 3) * 100 )
+}
+
+print(paste("The ", falling.in.cf(n1, cf.n1), "% of the n1 data fall into the region", sep=""))
+print(paste("The ", falling.in.cf(n2, cf.n2), "% of the n2 data fall into the region", sep=""))
+```
+
+```{r}
+plot.params <- function(y, n.iter, kmax) {
+  out <- c(rep(0, kmax))
+  for (k in 1:kmax){
+    parameters <- initialize.parameters(y.train, k) # randomly initialize parameters
+    p <- parameters$p 
+    mu <- parameters$mu 
+    sigma <- parameters$sigma
+    
+    out[k] <- handmade.em(y.train, p, mu, sigma, n.iter = n.iter, plot.flag = F) # get the estimated
+  }
+}
+```

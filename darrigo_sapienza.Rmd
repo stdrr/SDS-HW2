@@ -539,7 +539,7 @@ Start to simulate with n1 and n2 samples size defined above.
 
 ```{r echo=FALSE, warning=FALSE}
 kmax <- 8
-n.iter <- 200
+n.iter <- 20
 
 # try to simulate with n1 = 40 
 res.n1 <- do.simulate(n1, M=100, n.iter=n.iter, kmax=kmax)
@@ -636,7 +636,7 @@ plot.wass(res.n2, "n2")
 
 We want for plotting the wasses scores another type of representation with violin plot similar to box plot, but the main difference is the presence of the distribution of these data:
 
-```{r}
+```{r warning=FALSE}
 violin.plot(res.n1, "n1")
 violin.plot(res.n2, "n2")
 ```
@@ -656,11 +656,65 @@ best.model.prediction <- function(res, n) {
     }
   }
   
-  print(paste("----> The best model for predicting the true kmax with", n, "samples is: ", names(res)[which.max(scores)]))
+  return(paste("----> The best model for predicting the true kmax with", n, "samples is: ", names(res)[which.max(scores)]))
 }
 
 print(best.model.prediction(res.n1, "n1"))
 print(best.model.prediction(res.n2, "n2"))
+```
+
+We displayed, the through the iterations of six gaussian parameters the changment of the parameters at each iteration:
+
+```{r}
+plot.it <- function(param, type, n.iter) {
+  cols <- c()
+  cols <- c(cols, randomColor(count = 1,
+                          hue = c(" ", "random", "red", "orange", "yellow", "green", "blue", "purple", "pink", "monochrome"),
+                          luminosity = c(" ", "random", "light", "bright", "dark")))
+  if(type!="p"){
+    plot(c(1:(n.iter+1)), param[1][[colnames(param)[1]]],
+       main = paste(type, " at ", n.iter, "+1 iterations", sep=""), xlab="itereration", ylab="values",
+       lty=1, lwd = 3, type = "l", pch = 21, col=cols[1], xlim = c(1, n.iter), ylim = c(-2, 2), xaxs="i", yaxs="i")
+  } else {
+      plot(c(1:(n.iter+1)), param[1][[colnames(param)[1]]],
+       main = paste(type, " at ", n.iter, "+1 iterations", sep=""), xlab="itereration", ylab="values",
+       lty=1, lwd = 3, type = "l", pch = 21, col=cols[1], xlim = c(1, n.iter), ylim = c(0, 1), xaxs="i", yaxs="i")
+  }
+
+  for(i in 2:6) {
+     cols <- c(cols, randomColor(count = 1,
+                          hue = c(" ", "random", "red", "orange", "yellow", "green", "blue", "purple", "pink", "monochrome"),
+                          luminosity = c(" ", "random", "light", "bright", "dark")))
+     lines(c(1:(n.iter+1)), param[i][[colnames(param)[i]]],
+        lty=1, lwd = 3, type = "l", pch = 21,
+        col = cols[i])
+  }
+  
+  legend("bottomright", legend=colnames(param), col=cols, lty=1, cex=0.8)   
+}
+
+plot.params <- function(y, n.iter, kmax=6) {
+  out <- c(rep(0, kmax));
+
+  parameters <- initialize.parameters(y, 6) # randomly initialize parameters
+  p <- parameters$p 
+  mu <- parameters$mu 
+  sigma <- parameters$sigma
+  
+  out <- handmade.em(y, p, mu, sigma, n.iter = n.iter, plot.flag = F) # get the estimated
+
+  hist.values <- out$res
+  
+  opt.p <- hist.values[2:7]
+  opt.mu <- hist.values[8:13]
+  opt.sigma <- hist.values[14:19]
+  
+  plot.it(opt.p, "p", n.iter)
+  plot.it(opt.mu, "mu", n.iter)
+  plot.it(opt.sigma, "sigma", n.iter)
+}
+
+plot.params(XX, 100, kmax=6)
 ```
 
 We want to make different types of inferences, like seeing also the confidence interval of our n samples defined as n1=40 and n2=1000:
@@ -688,18 +742,4 @@ falling.in.cf <- function(n, cf) {
 
 print(paste("The ", falling.in.cf(n1, cf.n1), "% of the n1 data fall into the region", sep=""))
 print(paste("The ", falling.in.cf(n2, cf.n2), "% of the n2 data fall into the region", sep=""))
-```
-
-```{r}
-plot.params <- function(y, n.iter, kmax) {
-  out <- c(rep(0, kmax))
-  for (k in 1:kmax){
-    parameters <- initialize.parameters(y.train, k) # randomly initialize parameters
-    p <- parameters$p 
-    mu <- parameters$mu 
-    sigma <- parameters$sigma
-    
-    out[k] <- handmade.em(y.train, p, mu, sigma, n.iter = n.iter, plot.flag = F) # get the estimated
-  }
-}
 ```

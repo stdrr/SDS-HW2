@@ -17,26 +17,9 @@ In this exercise we design a simulation study in order to compare the performanc
 As a first step for this study, we extend the code provided [here](https://tinyurl.com/y9lgxbdz) in order to work with an arbitrary number of Gaussian components.
 Before modifying the `handmade.em` function, we define some routines which we make use of within it.
 
+$~$
 
-The first routine, `d.init`, computes the E step of the EM algorithm.
-
-$$~$$
-```{r}
-d.init <- function(y, p, mu, sigma) {
-  k <- length(p) # save the number of K gaussian components which is equal to the length of weights' vector                           
-  len.y <- length(y) # save the number of samples
-  d <- matrix(NA, k, len.y) # define the matrix with k components as number of rows and len.y as number of columns
-  
-  for(i in 1:k) {
-    d[i,] <- p[i] * dnorm(y, mu[i], sigma[i]) # for each k iteration we update the probability for each y observation 
-  }
-  
-  return(d)
-}
-```
-$$~$$
-
-The `likelihood` function is another routine used into the `handmade.em` that calculates for each observation the corresponding likelihood probability.
+The `likelihood` function is a routine used into the `handmade.em` and calculates, for each observation, the corresponding likelihood probability.
 
 ```{r}
 likelihood <- function(y, p, mu, sigma) {
@@ -72,7 +55,7 @@ At this point the `handmade.em` function generalized for an arbitrary number of 
 ```{r message=FALSE, warning=FALSE}
 require(randomcoloR) # we import this library in order to generate k random colors
 
-handmade.em <- function(y, p, mu, sigma, n.iter, plot.flag = T)
+handmade.em <- function(y, p, mu, sigma, n.iter, plot.flag = T, tol = 0.0001)
 {
   k <- length(p) # save the number of K gaussian components which is equal to the length of weights' vector
   len.y <- length(y) # save the number of samples
@@ -86,18 +69,16 @@ handmade.em <- function(y, p, mu, sigma, n.iter, plot.flag = T)
   like <- likelihood(y, p, mu, sigma)
   
   deviance <- -2 * sum(log(like))
-  res      <- matrix(NA,n.iter + 1, 3 * k + 2) # the columns are 3*k because 3 are the Gaussian parameters of length k and +2 because we want to save also the number of each iteration and the corresponding deviance
-  res[1,]  <- c(0, p, mu, sigma, deviance) # here we store the result for each i-th iteration
+  res <- matrix(NA, 1, 3 * k + 2) # the columns are 3*k because 3 are the Gaussian parameters of length k and +2 because we want to save also the number of each iteration and the corresponding deviance
+  res[1,] <- c(0, p, mu, sigma, deviance) # store the result for each i-th iteration
   
-  
-  d <- d.init(y, p, mu, sigma) # E step with the initial parameters
+  d <- matrix(NA, k, len.y)
   r <- matrix(NA, k, len.y) # initialization of the responsabilities matrix 
   for (iter in 1:n.iter) { # start i-th iteration
     
-    # E step - computes the responsabilites for each observation
-    for(i in 1:k) {
-      r[i,] <- d[i,] / colSums(d)
-    }
+    # E step
+    for(i in 1:k) d[i,] <- p[i]*dnorm(y, mu[i], sigma[i])
+    for(i in 1:k) r[i,] <- d[i,] / colSums(d) # compute the responsabilites for each observation
     
     # M step - update the theta parameters for the Gaussian components
     for(i in 1:k) {
@@ -106,52 +87,58 @@ handmade.em <- function(y, p, mu, sigma, n.iter, plot.flag = T)
       sigma[i] <- sqrt(sum(r[i,] * (y^2)) / sum(r[i,]) - (mu[i])^2)
     }
     
-    if(any(is.na(p)) || any(is.na(mu)) || any(is.na(sigma))) {
-      print(paste("converged after", iter, "iterations"))
+    # check if any parameter collapsed to NA or NaN
+    if(any(is.na(p)) || any(is.na(mu)) || any(is.na(sigma))) { 
+      # restore the parameter's values of the previous iteration
       p <- res[iter, 2:(k+1)]
       mu <- res[iter, (k+2):(2*k+1)]
       sigma <- res[iter, (2*k+2):(3*k+1)]
-      break
+      print(paste("NA detected - EM converged after", iter, "iterations"))
+      break # exit from the loop
     }
     
-    collapsing <- (sigma <= 0.001)
-    sigma[collapsing] <- runif(1, min = 1, max = 2)
-    mu[collapsing] <- rnorm(n = 1, mean = mean(y), sd = sd(y))
-    
-    if(all((likelihood(y, p, mu, sigma) - like) <= 0.0001)) {
-      print(paste("1 converged after", iter, "iterations"))
-      break
-    }
-    
+    # heuristic to try to avoid singularities, as pointed out in reference [1]
+    collapsing <- (sigma <= 0.01) # mask to detect variance collapsing to 0
+    sigma[collapsing] <- runif(1, min = 1, max = 2) # set sigma[i] to a non-zero value
+    mu[collapsing] <- rnorm(n = 1, mean = mean(y), sd = sd(y))  # in this case, the collapsed to a point of the
+                                                                # training set; set the mean to a random value
     # -2 x log-likelihood (a.k.a. deviance)
     like <- likelihood(y, p, mu, sigma)
+    deviance.pred <- deviance
     deviance <- -2 * sum( log(like) )
     
     # Save the results of the i-th iteration
-    res[iter+1, ] <- c(iter, p, mu, sigma, deviance)
+    res <- rbind(res, c(iter, p, mu, sigma, deviance))
     
-    # E step - update probabilities matrix
-    d <- d.init(y, p, mu, sigma) 
+    # check convergence
+    if(abs(deviance - deviance.pred) <= tol) {  
+      # if the change of the likelihood of each sample is no more than the tolerance threshold, then EM converged 
+      print(paste("EM converged after", iter, "iterations"))
+      break # exit from the loop
+    }
     
     # Plot
     if (plot.flag){
       hist(y, prob = T, breaks = 50, col = gray(.8), border = NA, 
            main = "", xlab = paste("EM Iteration: ", iter, "/", n.iter, sep = ""))
       set.seed(123)
+      
+      for(i in 1:k) d[i,] <- p[i]*dnorm(y, mu[i], sigma[i]) # update d 
+      
       points(jitter(y), rep(0,length(y)), 
              pch = 19, cex = .6, 
              col = assign.color(cols, d)) # assigns the colors to the observation point
       curve(likelihood(x, p, mu, sigma),
             lwd = 4, col = rgb(0,0,0,.5), add = TRUE)
-      Sys.sleep(1.5)
+      Sys.sleep(1)
     }
   }
-  
   res <- data.frame(res)
   names(res) <- c("iteration", paste("p", 1:k, sep=""), paste("mu", 1:k, sep=""), paste("sigma", 1:k, sep=""), "deviance") # generalize the number of columns with k components parameters
-  out <- list(parameters = c(p = p, mu = mu, sigma = sigma), deviance = deviance, res = res) # return the final result
-  return(out)
+  out <- list(parameters = c(p = p, mu = mu, sigma = sigma), deviance = deviance, res = res)
+  return(out) # return the final result
 }
+
 ```
 
 # Test EM-fit with different sample sizes
@@ -162,9 +149,11 @@ We define the following function in oder to random initialize parameters of the 
 
 ```{r}
 initialize.parameters <- function(y, k) {
-  p <- rep(1/k, k) # equally weight the k components
-  mu    <- runif(k, min = 0.1, max= 0.9) # generate random k means parameters
-  sigma <- runif(k, min = 0.1, max= 0.9) # generate random k sigma parameters
+  mean <- mean(y) # mean of the training set
+  sd <- sd(y) # standard deviation of the training set
+  p <- c(0.5, rep(0.1, k-1)) # equally weight the k components
+  mu <- rnorm(n = k, mean = mean, sd = sd) # generate random k means parameters
+  sigma <- abs(rnorm(n = k, mean = mean, sd = sd)) # generate random k sigma parameters
   
   return(list(p = p, mu = mu, sigma = sigma)) # return the list of generated parameters 
 }
@@ -179,7 +168,7 @@ bart.samples <- function(n) {
   return( rnormmix(n,
                    lambda = c(0.5, rep(0.1,5)),
                    mu = c(0, ((0:4)/2)-1),
-                   sigma = c(1, rep(0.1,5)) ))
+                   sigma = c(1, rep(0.1,5))) )
 }
 ```
 
@@ -188,7 +177,10 @@ plot.curve <- function(y, p, mu, sigma, n.iter) { # useful to plot the final res
   cols <- randomColor(count = length(p), 
                     hue = c(" ", "random", "red", "orange", "yellow", "green", "blue", "purple", "pink", "monochrome"), 
                     luminosity = c(" ", "random", "light", "bright", "dark"))
-  d <- d.init(y, p, mu, sigma)
+  
+  k <- length(p)
+  d <- matrix(NA, k, length(y))
+  for(i in 1:k) d[i,] <- p[i]*dnorm(y, mu[i], sigma[i]) # compute d 
     
   hist(y, prob = T, breaks = 50, col = gray(.8), border = NA, 
      main = "", xlab = paste("EM Iteration: ", n.iter, sep = ""))
@@ -204,7 +196,7 @@ plot.curve <- function(y, p, mu, sigma, n.iter) { # useful to plot the final res
 ## Non-Asymptotic regime
 
 ```{r}
-n1 <- 150 # Sample size that follows a non-asymptotic way
+n1 <- 40 # Sample size that follows a non-asymptotic way
 XX <- bart.samples(n1)
 
 parameters <- initialize.parameters(XX, k=6) # k is equal to six according to the bart distribution
@@ -213,16 +205,16 @@ parameters <- initialize.parameters(XX, k=6) # k is equal to six according to th
 p <- parameters$p 
 mu <- parameters$mu 
 sigma <- parameters$sigma
-
+iter <- 200
 # executed the handmade.em function for twenty iterations
-out1 <- handmade.em(XX, p, mu, sigma, n.iter = 20, plot.flag = F)
-plot.curve(XX, out1$parameters[1:6], out1$parameters[7:12], out1$parameters[13:18], n.iter = 20)
+out1 <- handmade.em(XX, p, mu, sigma, n.iter = iter, plot.flag = F)
+plot.curve(XX, out1$parameters[1:6], out1$parameters[7:12], out1$parameters[13:18], n.iter = iter)
 ```
 
 ## Asymptotic regime
 
 ```{r}
-n2 <- 2000 # Sample size that follows a reasonably asymptotic way
+n2 <- 1000 # Sample size that follows a reasonably asymptotic way
 XX <- bart.samples(n2)
 
 parameters <- initialize.parameters(XX, k=6) # k is equal to six according to the bart distribution
@@ -231,10 +223,10 @@ parameters <- initialize.parameters(XX, k=6) # k is equal to six according to th
 p <- parameters$p 
 mu <- parameters$mu 
 sigma <- parameters$sigma
-
+iter <- 2000
 # executed the handmade.em function for twenty iterations
-out2 <- handmade.em(XX, p, mu, sigma, n.iter = 20, plot.flag = F)
-plot.curve(XX, out2$parameters[1:6], out2$parameters[7:12], out2$parameters[13:18], n.iter = 20)
+out2 <- handmade.em(XX, p, mu, sigma, n.iter = iter, plot.flag = F)
+plot.curve(XX, out2$parameters[1:6], out2$parameters[7:12], out2$parameters[13:18], n.iter = iter)
 ```
 
 <!-- add a out1 and out2 plots -->
@@ -440,9 +432,13 @@ wass.score <- function(y.train, y.test, kmax, n.iter) { # routine function usefu
     mu <- out.opt[(k+1):(2*k)]
     sigma <- out.opt[(2*k+1):(3*k)]
     
-    wass.sc <- c(wass.sc, integrate(f, lower = 0, upper = 1,
-                                    p = p, mu = mu, sigma = sigma, y.test = y.test, 
-                                    rel.tol=.Machine$double.eps^.05)$value) # execute the integral in order to have the score
+    integral <- tryCatch(
+                        integrate(f, lower = 0, upper = 1,
+                        p = p, mu = mu, sigma = sigma, y.test = y.test, 
+                        rel.tol=.Machine$double.eps^.05)$value, # execute the integral in order to have the score
+                        error = function(e) return(NA)
+                        )
+    wass.sc <- c(wass.sc, integral)
   }
   
   best.wass <- wass.sc # return the index of the k component the minimize the score
@@ -541,14 +537,15 @@ $$~$$
 
 Start to simulate with n1 and n2 samples size defined above.
 
-```{r echo=FALSE warning=FALSE}
+```{r echo=FALSE, warning=FALSE}
 kmax <- 8
+n.iter <- 200
 
-# try to simulate with n1 = 150 
-res.n1 <- do.simulate(n1, M=50, n.iter=20, kmax=kmax)
+# try to simulate with n1 = 40 
+res.n1 <- do.simulate(n1, M=100, n.iter=n.iter, kmax=kmax)
 
-# try to simulate with n1 = 2000 
-res.n2 <- do.simulate(n2, M=50, n.iter=20, kmax=kmax)
+# try to simulate with n1 = 1000 
+res.n2 <- do.simulate(n2, M=100, n.iter=n.iter, kmax=kmax)
 ```
 
 $$~$$
@@ -666,7 +663,7 @@ print(best.model.prediction(res.n1, "n1"))
 print(best.model.prediction(res.n2, "n2"))
 ```
 
-We want to make different types of inferences, like seeing also the confidence interval of our n samples defined as n1=150 and n2=2000:
+We want to make different types of inferences, like seeing also the confidence interval of our n samples defined as n1=40 and n2=1000:
 
 ```{r}
 # Establish the confidence interval
@@ -675,10 +672,10 @@ confidence.interval <- function(n) {
   return(c(x_hat - 1.96 * se_hat, x_hat + 1.96 * se_hat))
 }
 
-n1 <- bart.samples(150)
+n1 <- bart.samples(40)
 cf.n1 <- confidence.interval(n1)
 
-n2 <- bart.samples(2000)
+n2 <- bart.samples(1000)
 cf.n2 <- confidence.interval(n2)
 ```
 

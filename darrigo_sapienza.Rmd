@@ -88,12 +88,11 @@ handmade.em <- function(y, p, mu, sigma, n.iter, plot.flag = T, tol = 0.0001)
     }
     
     # check if any parameter collapsed to NA or NaN
-    if(any(is.na(p)) || any(is.na(mu)) || any(is.na(sigma))) { 
+    if(any(!is.finite(p)) || any(!is.finite(mu)) || any(!is.finite(sigma))) { 
       # restore the parameter's values of the previous iteration
       p <- res[iter, 2:(k+1)]
       mu <- res[iter, (k+2):(2*k+1)]
       sigma <- res[iter, (2*k+2):(3*k+1)]
-      print(paste("NA detected - EM converged after", iter, "iterations"))
       break # exit from the loop
     }
     
@@ -112,8 +111,7 @@ handmade.em <- function(y, p, mu, sigma, n.iter, plot.flag = T, tol = 0.0001)
     
     # check convergence
     if(abs(deviance - deviance.pred) <= tol) {  
-      # if the change of the likelihood of each sample is no more than the tolerance threshold, then EM converged 
-      print(paste("EM converged after", iter, "iterations"))
+      # if the change of the deviance is no more than the tolerance threshold, then EM converged 
       break # exit from the loop
     }
     
@@ -151,7 +149,7 @@ We define the following function in oder to random initialize parameters of the 
 initialize.parameters <- function(y, k) {
   mean <- mean(y) # mean of the training set
   sd <- sd(y) # standard deviation of the training set
-  p <- c(0.5, rep(0.1, k-1)) # equally weight the k components
+  p <- c(rep(1/k, k)) # equally weight the k components
   mu <- rnorm(n = k, mean = mean, sd = sd) # generate random k means parameters
   sigma <- abs(rnorm(n = k, mean = mean, sd = sd)) # generate random k sigma parameters
   
@@ -513,9 +511,10 @@ do.simulate <- function(n, M, n.iter, kmax) {
     best.cross.validation10 <- c(best.cross.validation10, k.fold.cross.validation(XX, k.folds=10, kmax=kmax, n.iter))
     
     #Wass score
+    w <- wass.score(XX.Train50, XX.Test50, kmax=kmax, n.iter)
     wasses.scores <- rbind(wasses.scores, data.frame( k.component = 1:kmax, 
-                                                      score = wass.score(XX.Train50, XX.Test50, kmax=kmax, n.iter) ) )
-    wasses <- c(wasses, which.min(wass.score(XX.Train50, XX.Test50, kmax=kmax, n.iter)))
+                                                      score = w ) )
+    wasses <- c(wasses, which.min(w))
   }
   
   return(list(  AIC = best.aic.k, 

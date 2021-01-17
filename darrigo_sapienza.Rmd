@@ -10,20 +10,28 @@ knitr::opts_chunk$set(echo = TRUE)
 knitr::opts_chunk$set(cache = TRUE)
 ```
 
+$$~$$
+
 # Whack a MoG
+
+$$~$$
 
 In this exercise we design a simulation study, considering the Bart distribution as data and training a Mixture of Gaussians model through the Expectation-Maximization optimization algorithm. Different techniques are taken into account in order to select the model.
 
 $$~$$
 
-## 1. Code for the EM-fit of a generic mixture of $k \geq 1$ Gaussians
+## Code for the EM-fit of a generic mixture of $k \geq 1$ Gaussians
+
+$$~$$
 
 As a first step for this study, we extend the code provided [here](https://tinyurl.com/y9lgxbdz) in order to work with an arbitrary number of Gaussian components.
 Before modifying the `handmade.em` function, we define some routines which we make use of within it.
 
-$~$
+$$~$$
 
-First, the `likelihood` function is a routine used into the `handmade.em` and calculates, for each observation, the corresponding likelihood probability.
+First, the `likelihood` function is a routine used into the `handmade.em` and calculates, for each observation, the corresponding likelihood probability:
+
+$$~$$
 
 ```{r}
 likelihood <- function(y, p, mu, sigma) {
@@ -41,7 +49,9 @@ likelihood <- function(y, p, mu, sigma) {
 
 $$~$$
 
-With this last support routine, we assign to each observation the color of the Gaussian component which it most likely belongs to. 
+With this last support routine, we assign to each observation the color of the Gaussian component which it most likely belongs to:
+
+$$~$$
 
 ```{r message=FALSE, warning=FALSE}
 require(ramify) # we import this library in order to apply the argmax through the d matrix
@@ -54,7 +64,9 @@ assign.color <- function(cols, d) {
 
 $$~$$
 
-At this point the `handmade.em` function generalized for an arbitrary number of Gaussian components is: 
+At this point the `handmade.em` function generalized for an arbitrary number of Gaussian components is:
+
+$$~$$
 
 ```{r message=FALSE, warning=FALSE}
 require(randomcoloR) # we import this library in order to generate k random colors
@@ -188,7 +200,11 @@ plot.curve <- function(y, p, mu, sigma) { # useful to plot the final result iter
 ```
 
 $$~$$
+
+
 # Test EM-fit with different sample sizes
+
+$$~$$
 
 As mentioned at the beginning, we sample from a Bart distribution, which is defined as:
 
@@ -211,7 +227,11 @@ $$~$$
 
 ## Non-Asymptotic regime
 
+$$~$$
+
 Before going further, we test the functions defined so far with $n_1 = 40$: 
+
+$$~$$
 
 ```{r}
 n1 <- 40 # Sample size that follows a non-asymptotic way
@@ -226,14 +246,18 @@ sigma <- parameters$sigma
 iter <- 1000
 # executed the handmade.em function for twenty iterations
 out1 <- handmade.em(XX, p, mu, sigma, n.iter = iter, plot.flag = F)
-plot.curve(XX, out1$parameters[1:6], out1$parameters[7:12], out1$parameters[13:18], n.iter = iter)
+plot.curve(XX, out1$parameters[1:6], out1$parameters[7:12], out1$parameters[13:18])
 ```
 
 $$~$$
 
 ## Asymptotic regime
 
+$$~$$
+
 ...and with $n_2 = 1000$:
+
+$$~$$
 
 ```{r}
 n2 <- 1000 # Sample size that follows a reasonably asymptotic way
@@ -248,12 +272,14 @@ sigma <- parameters$sigma
 iter <- 1000
 # executed the handmade.em function for twenty iterations
 out2 <- handmade.em(XX, p, mu, sigma, n.iter = iter, plot.flag = F)
-plot.curve(XX, out2$parameters[1:6], out2$parameters[7:12], out2$parameters[13:18], n.iter = iter)
+plot.curve(XX, out2$parameters[1:6], out2$parameters[7:12], out2$parameters[13:18])
 ```
 
 $$~$$
 
 ## The reasons of these results?
+
+$$~$$
 
 Even with these naive examples, our initial expectations are confirmed. Indeed, according to the Law of Large Numbers and the Central Limit Theorem the number of samples are significant in order to follow the true parameters of the distribution. The LLN says that we can achieve the true mean of the distribution increasing the number of samples and with the CLT we can see if the distribution follows the Gaussian shape.
 
@@ -263,7 +289,11 @@ $$~$$
 
 In this section we introduce different methods in order to find the best $k$ components for these different sample sizes distributed as a Bart density.
 
+$$~$$
+
 ## AIC (Akaike Information Criterion) & BIC (Bayesian Information Criterion)
+
+$$~$$
 
 The AIC method is used for the model selection, it adds a penalization proportional to the complexity of the models: the more complex the model is the more relevant is the penalization.
 
@@ -323,6 +353,8 @@ $$~$$
 
 ## Sample Splittings
 
+$$~$$
+
 This particular method divides randomly the main dataset into training and test set given a percentage of these splits. After that, we estimate the model parameters using the training set and we evaluate the "goodness" of the estimations using the test set.
 
 $$~$$
@@ -362,6 +394,8 @@ training.model <- function(y.train, y.test, kmax, n.iter) {
 $$~$$
 
 ## K-Fold Cross-Validation
+
+$$~$$
 
 This method randomly divides the observations into `k` folds of approximately equal size. At each step, this method chooses one fold as test set and the other ones are used as training set in order to fit the model.
 
@@ -419,6 +453,8 @@ $$~$$
 
 ## Wasserstein
 
+$$~$$
+
 The Wasserstein distance is a distance function defined between probability distributions on a given metric space. For our work we evaluate this formula:
 
 $$W_k = \int_0^1 |{F_k^{-1}(z|\hat\theta_{Tr})-\hat F_{Te}^{-1}(z)}| dz$$
@@ -470,6 +506,8 @@ wass.score <- function(y.train, y.test, kmax, n.iter) { # routine function usefu
 $$~$$
 
 # ...Do Simulations!
+
+$$~$$
 
 We define a routine function in order to simulate M=100 times the samples from a Bart distribution. 
 
@@ -557,9 +595,11 @@ do.simulate <- function(n, M, n.iter, kmax) {
 
 $$~$$
 
-Start to simulate with $n_1$ and $n_2$ samples size defined above.
+Start to simulate with $n_1$ and $n_2$ sample sizes defined above.
 
-```{r echo=FALSE, warning=FALSE}
+$$~$$
+
+```{r warning=FALSE}
 kmax <- 8
 n.iter <- 200
 
@@ -573,6 +613,8 @@ res.n2 <- do.simulate(n2, M=100, n.iter=n.iter, kmax=kmax)
 $$~$$
 
 # Plot & Summaries
+
+$$~$$
 
 After the simulations, we plot the frequencies of the $k$ values selected by each method: 
 
@@ -652,6 +694,7 @@ plot.wass(res.n1, "n1")
 ```
 
 $$~$$
+
 As we can see in the plots, taking $n_1$ all of the methods select the lowest $k$, since the number of samples is too small and then we are considering a non asymptotic regime.
 
 $$~$$
@@ -666,14 +709,17 @@ plot.wass(res.n2, "n2")
 $$~$$
 
 With $n_2$, the different behaviours of the model selection methods are evident:
+
 - **AIC vs BIC**: in this plot we can see that AIC penalizes less the model as it gets more complex, then it usually selects a number of $k$ greater than that selected by BIC. In both cases, the selected $k$ is not equal to the real $k^*=6$ of the Bart, even though the number of times in which they pick $k=6$ is high.
 - **Train-Test splits**: as expected, the good proportions for the splitting are 50-50% and 70-30%, while the performance of 30-70% is very poor.
 - **k-folds**: surprisingly, the value of $k$ selected usually coincides with the value of $k_{max}$.
-- **Wasserstein**: the selcted $k$ is near to $k*$.
+- **Wasserstein**: the selcted $k$ is near to $k^*$.
 
 $$~$$
 
 We then plot the Wasserstein distances across the M iterations, using a violin plot. Since, as expected, with $k=1$ and $n_2$ there are many outliers, we keep the case of $k=1$ out. This choice doesn't affect the results, since $k=1$ is not a significant case.  
+
+$$~$$
 
 ```{r warning=FALSE}
 violin.plot(res.n1, "n1")
@@ -682,7 +728,13 @@ violin.plot(res.n2, "n2")
 
 $$~$$
 
+As we can see above, with $n_1$ the lowest $k$ components are the best because the violins trend goes down and the most of the outcomes is close to the second quartile; as a counterexample, for $k = 6, 7, 8$ many outcomes are above the second quartile. With $n_2$ the situation is reversed; this confirmes that $k = 6, 7, 8$ are the best choices.
+
+$$~$$
+
 Then, we see which metric has selected the more times the true $k_{max}$ for the Bart distribution, considering $k^* = 6$:
+
+$$~$$
 
 ```{r include=FALSE}
 best.model.prediction <- function(res, n) {
@@ -699,14 +751,16 @@ best.model.prediction <- function(res, n) {
   
   return(paste("----> The best model for predicting the true kmax with", n, "samples is: ", names(res)[which.max(scores)]))
 }
+```
 
-print(best.model.prediction(res.n1, "n1"))
-print(best.model.prediction(res.n2, "n2"))
+```{r}
+best.model.prediction(res.n1, "n1")
+best.model.prediction(res.n2, "n2")
 ```
 
 $$~$$
 
-We display the through the iterations of six gaussian parameters the changment of the parameters at each iteration:
+We reckon relevant showing the trend of the parameters during a training session. The plots below show this trend:
 
 ```{r include=FALSE}
 plot.it <- function(param, type, n.iter) {
@@ -763,6 +817,8 @@ plot.params(bart.samples(n1), 100, kmax=6)
 plot.params(bart.samples(n2), 100, kmax=6)
 ```
 
+$$~$$
+
 Finally, knowing that, in general, if $\hat\theta_r$ is the estimeted $r^{th}$ parameter and $\theta_r$ the $r^{th}$ true parameter, $\frac{\hat\theta_r - \theta_r}{\hat{se}_r} \xrightarrow{d} N(0,1)$, we plot the empirical distribution of the estimated weights $\hat p_r$: we expect they follow a Normal distro with mean $p_r$ and a certain $\hat{se}_r$:
 
 $$~$$
@@ -789,7 +845,7 @@ check.p.distro <- function(n, M = 100) {
 }
 ```
 
-```{r}
+```{r warning=FALSE}
 out <- check.p.distro(n = 1000, M = 1000)
 for(i in 1:6) {
   hist(out[i,], col = "orchid", border = "white", 
@@ -798,6 +854,7 @@ for(i in 1:6) {
   )
 }
 ```
+
 $$~$$
 
-As the plots show, the distribution of each $p_r$ in some cases approximately has a Gaussian shape, even though the means don't coincide with the true Bart's weights. Probably this is due to the choices made during the initialization.
+As the plots show, the distribution of each $p_r$ in some cases has an approximately Gaussian shape, even though the means don't coincide with the true Bart's weights. Probably this is due to the choices made during the initialization.
